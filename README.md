@@ -1,4 +1,7 @@
 # Intro
+
+[![hackmd-github-sync-badge](https://hackmd.io/2i-s6kk5SbGv-v5dF11x8w/badge)](https://hackmd.io/2i-s6kk5SbGv-v5dF11x8w)
+
 歡迎你來到電池組，在這裡我要教你如何建立可以編譯並上傳 BMS 韌體的程式的環境  
 
 # Prerequisite
