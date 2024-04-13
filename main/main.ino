@@ -174,9 +174,9 @@ bool GPIOBITS_A[5] = {true, true, true, true,
 bool GPIOBITS_B[4] = {true, true, true,
                       true};  //!< GPIO Pin Control // Gpio 6,7,8,9
 bool DCCBITS_A[12] = {
-    false, false, false, false, false, false, false,
-    false, false, false, false, false};  //!< Discharge cell switch //Dcc
-                                         //!< 1,2,3,4,5,6,7,8,9,10,11,12
+    false, false, false, false, false, false,
+    false, false, false, false, false, false};  //!< Discharge cell switch //Dcc
+                                                //!< 1,2,3,4,5,6,7,8,9,10,11,12
 bool DCCBITS_B[7] = {
     false, false, false, false,
     false, false, false};  //!< Discharge cell switch //Dcc 0,13,14,15
@@ -286,7 +286,6 @@ void setup() {
   starttowork();
   delay(100);
   Serial.println("1st starttowork completed");
-  // temp_detect();
   voltage_print();
   Serial.println("1st voltage_print completed");
   stat_print.every(
@@ -372,24 +371,10 @@ void voltage_print() {
     // totalvol+=sumvol[j];
     Serial.println("");
   }
-  // current_detect();
   Maximum();
   Minimum();
-  ///////////////error_average();
-  ///////////////error_difference();
   error_temp();
-  // error_current();
-  // error_soc();
   emergency();
-  /*******************SDcard***************************/
-  /*u+=1;   //Shut down the printout
-    if(u=5){
-    SD_save5();
-    u=0;
-    }
-    SD_save1();*/
-
-  // SD_print(4);
   /*******************Canbus*************************/
   CAN_FRAME incoming;
   static unsigned long lastTime = 0;
@@ -430,21 +415,9 @@ void voltage_print() {
       break;
   }
 }
+
 void starttowork1() {
-  // wakeup_sleep(TOTAL_IC);
-  // LTC6811_adcv(ADC_CONVERSION_MODE, ADC_DCP, CELL_CH_TO_CONVERT);
-  // Serial.println("StartToWork");
   run_command(92);
-  // sendData();         ////////////////
-  // Serial.println();
-  // Serial.println();
-  // Serial.print(F("Sum voltage "));
-  // Serial.print(F(" : "));
-  // Serial.print(totalvol, 4);
-  // Serial.println(F(",   "));
-  // Serial.print(F("Total Current:"));
-  // Serial.print(current, 4);
-  // Serial.println(F(",   "));
   for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
     Serial.print(F("Sum voltage of IC "));
     Serial.print(current_ic + 1);
@@ -504,117 +477,8 @@ void starttowork1() {
     Serial.println(F("Discharging!!!!!!!"));
   }
 }
-void voltage_update()  // update voltage per 500ms
-{
-  Serial.println("voltage updat");
-  int8_t error = 0;
-  wakeup_sleep(TOTAL_IC);
-  LTC6811_adcv(ADC_CONVERSION_MODE, ADC_DCP, CELL_CH_TO_CONVERT);
-  error = LTC6811_rdcv(SEL_ALL_REG, TOTAL_IC,
-                       BMS_IC);  // Set to read back all cell voltage registers
-  check_error(error);
-  totalvol = 0;
-  double hh = 0;
-  for (int j = 0; j < TOTAL_IC; j++) {
-    vmin[j] =
-        5;  // vmin, vmax are recalculated in voltage_update & run_command(92)
-            // each time in voltage_updated & run_command(92)
-    vmax[j] = 0;
-    avgvol[j] = 0;  // avgvol,sumvol are calculated in voltage_update
-    sumvol[j] = 0;
-    for (int i = 0; i < BMS_IC[0].ic_reg.cell_channels; i++) {
-      Serial.print(BMS_IC[j].cells.c_codes[i] * 0.0001, 4);
-      Serial.print(" ");
-      sumvol[j] += BMS_IC[j].cells.c_codes[i] * 0.0001;
-      if (j != 0) {
-        hh += BMS_IC[j - 1].cells.c_codes[i] * 0.0001;
-      }
-      totalvol += BMS_IC[j].cells.c_codes[i] * 0.0001;
-      // vmin[j] > BMS_IC[j].cells.c_codes[i] * 0.0001 ? minb[j] = i + 1 : 1;
-      // vmin[j] > BMS_IC[j].cells.c_codes[i] * 0.0001 ? vmin[j] =
-      // BMS_IC[j].cells.c_codes[i] * 0.0001 : 1; vmax[j] <
-      // BMS_IC[j].cells.c_codes[i] * 0.0001 ? maxb[j] = i + 1 : 1; vmax[j] <
-      // BMS_IC[j].cells.c_codes[i] * 0.0001 ? vmax[j] =
-      // BMS_IC[j].cells.c_codes[i] * 0.0001 : 1;
-      /*compare min & max voltage in each segment(IC)*/
-      if (vmin[j] > (float)(BMS_IC[j].cells.c_codes[i] * 0.0001)) {
-        vmin[j] = BMS_IC[j].cells.c_codes[i] * 0.0001;
-        minb[j] = i + 1;
-      }
-      if (vmax[j] < (float)(BMS_IC[j].cells.c_codes[i] * 0.0001)) {
-        vmax[j] = BMS_IC[j].cells.c_codes[i] * 0.0001;
-        maxb[j] = i + 1;
-      }
-    }
-    Serial.print(" Min ");
-    Serial.print(vmin[j], 4);
-    Serial.print(" Max ");
-    Serial.print(vmax[j], 4);
-    // avgvol[j] = sumvol[j] / 18;
-    avgvol[j] = (totalvol - hh) / 18.0;
-    // totalvol+=sumvol[j];
-    Serial.println("");
-  }
-  // current_detect();
-  temp_detect();
-  // Maximum();
-  // Minimum();
-  // error_average();
-  // error_difference();
-  error_temp();
-  // error_current();
-  // error_soc();
-  emergency();
-  /*******************SDcard***************************/
-  /*u+=1;   //Shut down the printout
-    if(u=5){
-    SD_save5();
-    u=0;
-    }
-    SD_save1();*/
 
-  // SD_print(4);
-  /*******************Canbus*************************/
-  CAN_FRAME incoming;
-  static unsigned long lastTime = 0;
-  if (Can0.available() > 0) {
-    Can0.read(incoming);
-    printFrame(incoming);
-    unsigned long t = millis();
-    unsigned long start = millis();
-    while (start < t + 200) {
-      start = millis();
-    }
-  }
-  // incoming.id = 224;
-  switch (incoming.id) {
-    case 192: {
-      // Serial.print("Go to ");
-      break;
-    }
-    case 224:
-      // Serial.println("ooooooooo");
-      send_msg_important();
-      break;
-    case 217:
-      // Serial.println("PI");
-      if (incoming.data.bytes[0] == 0 && incoming.data.bytes[1] == 0) {
-        send_msg_important();  // 216
-      }
-      if (incoming.data.bytes[0] == 1 || incoming.data.bytes[0] == 3 ||
-          incoming.data.bytes[0] == 5) {
-        id = incoming.data.bytes[0];
-        send_msg_battery();
-        id = incoming.data.bytes[1];
-        send_msg_battery();
-      }
-      break;
-    default:
-      Serial.print("");
-      break;
-  }
-}
-
+// not using
 void starttowork() {
   // wakeup_sleep(TOTAL_IC);
   // LTC6811_adcv(ADC_CONVERSION_MODE, ADC_DCP, CELL_CH_TO_CONVERT);
@@ -690,8 +554,9 @@ void starttowork() {
   }
 }
 
-void moniV()  // Every loop will Check out the Discharging cell is lower than
-              // the lowest cell or not
+void moniV()
+// Every loop will Check out the Discharging cell is lower than
+// the lowest cell or not
 {
   uint32_t conv_time = 0;
   int8_t error = 0;
@@ -774,34 +639,6 @@ void battery_charge_balance() {
   }
 }
 
-/*void current_detect(){
-  analogReadResolution(12);
-  ct_count++;
-  //Serial.println(analogRead(A0));
-  sum1 += analogRead(A8);
-  sum2 += analogRead(A9);
-
-  if(ct_count==2){
-    sum1 = (sum1/ct_count-offset1)*30/(3405-offset1);
-    sum2 = (sum2/ct_count-offset2)*350/(3400-offset2);
-    if(sum1 < 30 && sum1 > -30){
-      current = sum1;
-    }
-    else{
-      current = sum2;
-    }
-    Serial.print("Current:  ");
-    Serial.println(current);
-    Serial.print("Sum1:  ");
-    Serial.println(sum1);
-    Serial.print("Sum2:  ");
-    Serial.println(sum2);
-    ct_count=0;
-    sum1=0;
-    sum2=0;
-  }
-  }*/
-
 void temp_detect() {
   uint32_t conv_time = 0;
   int8_t error = 0;
@@ -864,11 +701,6 @@ void temp_detect() {
   }
 }
 
-/*///////////Error Detecting///////////////
-  /////////////////////////////////////////*/
-/*Fcn Maximum check if any segment has cell's voltage >3.73V by comparing global
- * array vmin with 3.7, and vmax is calculated both in fcn voltage_update & fcn
- * starttowork(call another fcn run_command(92)) */
 void Maximum() {
   for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
     if ((float)vmax[current_ic] > 4.3) {
@@ -887,9 +719,7 @@ void Maximum() {
     }
   }
 }
-/*Fcn Minimum check if any segment has cell's voltage <2.5V by comparing global
- * array vmin with 2.5, and vmin is calculated both in fcn voltage_update & fcn
- * starttowork(call another fcn run_command(92))*/
+
 void Minimum() {
   for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++)
 
@@ -908,56 +738,7 @@ void Minimum() {
     }
   }
 }
-/*Fcn error_average check if any segment's vmax>  cells' avg. voltage in the
- * same segment, by compare global array vmax with avgvol.Global array  vmax &
- * avgvol are calculated*/
-void error_average() {
-  for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-    if (vmax[current_ic] > avgvol[current_ic] + 0.2) {
-      Serial.print(F("IC(segment): "));
-      Serial.print(current_ic);
-      Serial.print(F("   vmax:  "));
-      Serial.print(vmax[current_ic]);
-      Serial.println(F(" is Over Average Voltage !"));
-      maxavererror(current_ic, 1);
-      BMS_FAULT_STATUS[++BMS_FAULT_COUNTER] = {2, current_ic, -1,
-                                               vmax[current_ic]};
-    }
-    if (vmin[current_ic] < avgvol[current_ic] - 0.2) {
-      Serial.print(F("IC(segment): "));
-      Serial.print(current_ic);
-      Serial.print(F("   vmin:  "));
-      Serial.print(vmin[current_ic]);
-      Serial.println(F("Under Average Voltage !"));
-      minavererror(current_ic, 1);
-      BMS_FAULT_STATUS[++BMS_FAULT_COUNTER] = {3, current_ic, -1,
-                                               vmax[current_ic]};
-    } else {
-      maxavererror(current_ic, 0);
-      minavererror(current_ic, 0);
-    }
-  }
-}
-/*Fcn error_difference check if any segment's max voltage difference >0.65V, by
- * compare vmax-vmin of each segment with 0.65, global array vmin & vmax are
- * calculated in fcn voltage_update  & fcn starttowork(call another fcn
- * run_command(92))*/
-void error_difference() {
-  for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-    if (vmax[current_ic] - vmin[current_ic] > 0.5) {
-      Serial.print(F("IC(segment): "));
-      Serial.print(current_ic);
-      Serial.print(F("   vmax:  "));
-      Serial.print(vmax[current_ic]);
-      Serial.println(F(" is Over maximum Voltage difference !"));
-      differror(current_ic, 1);
-      BMS_FAULT_STATUS[++BMS_FAULT_COUNTER] = {4, current_ic, -1,
-                                               vmax[current_ic]};
-    } else {
-      differror(current_ic, 0);
-    }
-  }
-}
+
 void error_temp() {
   for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
     for (int i = 0; i < 8; i++) {
@@ -991,17 +772,6 @@ void error_current() {
   }
 }
 
-/*void error_soc(){
-  if (BMS_IC[0].aux.a_codes[0]*0.0001 < 10)
-  {
-    Serial.println(F("SOC < 10% !"));
-    shutdown_status = true;
-    emergency_error2[2]=1;
-  }
-  }*/
-
-/*/////////////can_bus/////////////////////
-  /////////////////////////////////////////*/
 void msg_assign(unsigned int a) {
   int low_total = a % 256;
   int high_total = a / 256;
@@ -1123,6 +893,7 @@ void send_msg_battery() {
   msg[7] = 0;
   send_msg(221, msg);
 }
+
 void send_msg_important() {
   num = 0;  // current
   // msg_assign(current*100);
@@ -1170,176 +941,6 @@ void emergency() {
   }
 }
 
-/*/////////////SD card////////////////*/
-void SD_save1() {
-  SD.begin(4);
-  // Serial.print("\nWaiting for SD card ready...");
-  if (!SD.begin(4)) {
-    Serial.println("SD card Fail!");
-    return;
-  }
-  // Serial.println("Success!");
-  myFile = SD.open("BMS_1.txt", FILE_WRITE);  // 開啟檔案，一次僅能開啟一個檔案
-  if (myFile) {
-    myFile.print(F("Total voltage "));
-    myFile.print(F(" : "));
-    myFile.print(totalvol, 4);
-    myFile.println(F(",   "));
-    /*myFile.print(F("Total current "));
-      myFile.print(F(" : "));
-      //myFile.print(current,4);
-      myFile.println(F(",   "));*/
-  } else {
-    Serial.println("\n open file error ");  // 無法開啟時顯示錯誤
-  }
-  myFile.close();
-}
-
-void SD_save5() {
-  SD.begin(4);
-  // Serial.print("\nWaiting for SD card ready...");
-  if (!SD.begin(4)) {
-    Serial.println("SD card Fail!");
-    return;
-  }
-  // Serial.println("Success!");
-  myFile = SD.open("BMS_5.txt", FILE_WRITE);  // 開啟檔案，一次僅能開啟一個檔案
-  if (myFile) {                               // 假使檔案開啟正常
-    for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-      myFile.print(F("Average voltage of IC "));
-      myFile.print(current_ic + 1);
-      myFile.print(F(" : "));
-      myFile.print(avgvol[current_ic], 4);
-      myFile.print(F(",   "));
-
-      /*myFile.print(F("SOC"));
-        myFile.print(F(" : "));
-        myFile.print(100);
-        myFile.print(F("% "));
-        myFile.println(F(",   "));*/
-
-      myFile.print(F("MAX difference Voltage_"));
-      myFile.print(F("IC "));
-      myFile.print(current_ic + 1);
-      myFile.print(F(" : "));
-      myFile.print(vmax[current_ic] - vmin[current_ic], 4);
-      myFile.print(F(",   "));
-
-      myFile.print(F("Highest Voltage:"));
-      myFile.print(vmax[current_ic], 4);
-      myFile.print(F(",   "));
-
-      myFile.print(F("Lowest Voltage:"));
-      myFile.print(vmin[current_ic], 4);
-      myFile.print(F("   ;   "));
-    }
-    myFile.println();
-  }
-  myFile.close();
-
-  myFile = SD.open("BMS_T.txt", FILE_WRITE);  // 開啟檔案，一次僅能開啟一個檔案
-  if (myFile) {                               // 假使檔案開啟正常
-    for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-      myFile.print(F("Temperature:"));
-      myFile.print(F("IC "));
-      myFile.print(current_ic + 1, DEC);
-      myFile.print(",");
-      for (int i = 0; i < 8; i++) {
-        if (i != 2 && i != 5 && i != 6) {
-          myFile.print(BMS_IC[current_ic].aux.a_codes[i] * 0.01);
-          myFile.print(F(",   "));
-        }
-      }
-      myFile.print("   ;   ");
-    }
-    myFile.println();
-    // Serial.println("Completed !!");
-    myFile.close();  // 關閉檔案
-  }
-
-  myFile = SD.open("BMS_B.txt", FILE_WRITE);  // 開啟檔案，一次僅能開啟一個檔案
-  if (myFile) {                               // 假使檔案開啟正常
-    for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-      myFile.print("IC ");
-      myFile.print(current_ic + 1, DEC);
-      myFile.print(",");
-      for (int i = 0; i < BMS_IC[0].ic_reg.cell_channels; i++) {
-        myFile.print(" C");
-        myFile.print(i + 1, DEC);
-        myFile.print(":");
-        myFile.print(BMS_IC[current_ic].cells.c_codes[i] * 0.0001, 4);
-        myFile.print(",");
-      }
-      myFile.print("   ;   ");
-    }
-    myFile.println();
-    // Serial.println("Completed !!");
-    myFile.close();  // 關閉檔案
-  } else {
-    Serial.println("\n open file error ");  // 無法開啟時顯示錯誤
-  }
-}
-void SD_print(int a) {
-  SD.begin(4);
-  if (!SD.begin(4)) {
-    Serial.println("Fail!");
-    return;
-  }
-  // Serial.println("Success!");
-  switch (a) {
-    case 1:
-      myFile = SD.open("BMS_1.txt");
-      if (myFile) {                   // 判斷檔案是否存在
-        while (myFile.available()) {  // 若還有可讀取的資料
-          Serial.write(myFile.read());
-        }
-        myFile.close();  // 關閉檔案
-      } else {
-        Serial.println("error opening BMS_1.txt");
-      }
-      break;
-    case 2:
-      myFile = SD.open("BMS_5.txt");
-      if (myFile) {                   // 判斷檔案是否存在
-        while (myFile.available()) {  // 若還有可讀取的資料
-          Serial.write(myFile.read());
-        }
-        myFile.close();  // 關閉檔案
-      } else {
-        Serial.println("error opening BMS_2.txt");
-      }
-      break;
-    case 3:
-      myFile = SD.open("BMS_B.txt");
-      if (myFile) {                   // 判斷檔案是否存在
-        while (myFile.available()) {  // 若還有可讀取的資料
-          Serial.write(myFile.read());
-        }
-        myFile.close();  // 關閉檔案
-      } else {
-        Serial.println("error opening BMS_B.txt");
-      }
-      break;
-    case 4:
-      myFile = SD.open("BMS_T.txt");
-      if (myFile) {                   // 判斷檔案是否存在
-        while (myFile.available()) {  // 若還有可讀取的資料
-          Serial.write(myFile.read());
-        }
-        myFile.close();  // 關閉檔案
-      } else {
-        Serial.println("error opening BMS_T.txt");
-      }
-      break;
-  }
-}
-/***************************************End of Customize
- * Function****************************/
-
-/*!*********************************************************************
-  \brief Main loop
-   @return void
-***********************************************************************/
 void loop() {
   uint32_t user_command;
   if (Serial.available())  // Check for user input
@@ -1393,14 +994,12 @@ void loop() {
   spi_enable(
       SPI_CLOCK_DIV16);  // This will set the Linduino to have a 1MHz Clock
 }
+
 int FAULT_TYPE;
 int SEGMENT;
 int CELL_NUM;
 double VOLTAGE;
-/*!*****************************************
-  \brief executes the user command
-    @return void
-*******************************************/
+
 void run_command(uint32_t cmd) {
   uint8_t streg = 0;
   int8_t error = 0;
@@ -1408,126 +1007,7 @@ void run_command(uint32_t cmd) {
   int8_t s_pin_read = 0;
   int8_t s_ic = 0;
 
-  switch (cmd) {
-    case 1:  // Write and read Configuration Register
-      wakeup_sleep(TOTAL_IC);
-      LTC6811_wrcfg(TOTAL_IC, BMS_IC);   // Write into Configuration Register
-      LTC6811_wrcfgb(TOTAL_IC, BMS_IC);  // Write into Configuration Register B
-      print_wrconfig();
-      print_wrconfigb();
-
-      wakeup_idle(TOTAL_IC);
-      error = LTC6811_rdcfg(TOTAL_IC, BMS_IC);  // Read Configuration Register
-      check_error(error);
-      error =
-          LTC6811_rdcfgb(TOTAL_IC, BMS_IC);  // Read Configuration Register B
-      check_error(error);
-      print_rxconfig();
-      print_rxconfigb();
-      break;
-
-    case 2:  // Read Configuration Register
-      wakeup_sleep(TOTAL_IC);
-      error = LTC6811_rdcfg(TOTAL_IC, BMS_IC);
-      check_error(error);
-      error = LTC6811_rdcfgb(TOTAL_IC, BMS_IC);
-      check_error(error);
-      print_rxconfig();
-      print_rxconfigb();
-      break;
-
-    case 3:  // Start Cell ADC Measurement
-      wakeup_sleep(TOTAL_IC);
-      LTC6811_adcv(ADC_CONVERSION_MODE, ADC_DCP, CELL_CH_TO_CONVERT);
-      conv_time = LTC6811_pollAdc();
-      print_conv_time(conv_time);
-      break;
-
-    case 4:  // Read Cell Voltage Registers
-      wakeup_sleep(TOTAL_IC);
-      error =
-          LTC6811_rdcv(SEL_ALL_REG, TOTAL_IC,
-                       BMS_IC);  // Set to read back all cell voltage registers
-      check_error(error);
-      print_cells(DATALOG_DISABLED);
-      break;
-
-    case 5:  // Start GPIO ADC Measurement
-      wakeup_sleep(TOTAL_IC);
-      LTC6811_adax(ADC_CONVERSION_MODE, AUX_CH_TO_CONVERT);
-      conv_time = LTC6811_pollAdc();
-      /*Serial.print(F("Auxiliary conversion completed in :"));
-        Serial.print(((float)conv_time/1000), 1);
-        Serial.println(F("ms"));
-        Serial.println();*/
-      break;
-
-    case 6:  // Read AUX Voltage Registers
-      wakeup_sleep(TOTAL_IC);
-      error = LTC6811_rdaux(0, TOTAL_IC,
-                            BMS_IC);  // Set to read back all aux registers
-      check_error(error);
-      print_aux(DATALOG_DISABLED);
-      break;
-
-    case 23:  // Enable a discharge transistor
-      s_pin_read = select_s_pin();
-      wakeup_sleep(TOTAL_IC);
-      LTC6811_set_discharge(s_pin_read, TOTAL_IC, BMS_IC);
-      LTC6811_wrcfg(TOTAL_IC, BMS_IC);
-      LTC6811_wrcfgb(TOTAL_IC, BMS_IC);
-      print_wrconfig();
-      print_wrconfigb();
-      wakeup_idle(TOTAL_IC);
-      error = LTC6811_rdcfg(TOTAL_IC, BMS_IC);
-      check_error(error);
-      error = LTC6811_rdcfgb(TOTAL_IC, BMS_IC);
-      check_error(error);
-      print_rxconfig();
-      print_rxconfigb();
-      break;
-
-    case 24:  // clear discharge of seleted cell of all ICs
-      s_pin_read = select_s_pin();
-      wakeup_sleep(TOTAL_IC);
-      LTC6811_clear_custom_discharge(s_pin_read, TOTAL_IC, BMS_IC);
-      LTC6811_wrcfg(TOTAL_IC, BMS_IC);
-      LTC6811_wrcfgb(TOTAL_IC, BMS_IC);
-      // print_wrconfig();
-      // print_wrconfigb();
-      wakeup_idle(TOTAL_IC);
-      error = LTC6811_rdcfg(TOTAL_IC, BMS_IC);
-      check_error(error);
-      error = LTC6811_rdcfgb(TOTAL_IC, BMS_IC);
-      check_error(error);
-      // print_rxconfig();
-      // print_rxconfigb();
-      break;
-
-    case 28:  // Read byte data I2C Communication on the GPIO Ports(using eeprom
-              // 24AA01)
-      wakeup_sleep(TOTAL_IC);
-      /************************************************************
-        Communication control bits and communication data bytes.
-        Refer to the data sheet.
-      *************************************************************/
-      for (uint8_t current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-        BMS_IC[current_ic].com.tx_data[0] =
-            0x6A;  // Icom(6)Start + I2C_address D0 (1010 0000)
-        BMS_IC[current_ic].com.tx_data[1] = 0x10;  // Fcom master ack
-        BMS_IC[current_ic].com.tx_data[2] =
-            0x60;  // again start I2C with I2C_address (1010 0001)
-        BMS_IC[current_ic].com.tx_data[3] = 0x19;  // fcom master nack + stop
-      }
-      LTC6811_wrcomm(TOTAL_IC, BMS_IC);
-      wakeup_idle(TOTAL_IC);
-      // LTC6811_stcomm();// I2C for write data in slave device
-      LTC6811_pollAdc();
-      error = LTC6811_rdcomm(TOTAL_IC, BMS_IC);  // Read comm register
-      check_error(error);
-      print_rxcomm();  // Print comm register
-      break;
-
+  switch (cmd) { // run_command()
     case 'm':  // prints menu
       print_menu();
       break;
@@ -1548,128 +1028,6 @@ void run_command(uint32_t cmd) {
       // print_avgofvoltage();
       break;
       ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    case 79:  // set discharge of cells of selected ICs  for ID4 only
-      Serial.println(F("Run 79, Discharge a segment 4!!"));
-      // s_ic = TOTAL_IC-select_ic();
-      // ////1->0(6->5),2->1(5->4),3->2(4->3),4->3(3->2),5->4(2->1),6->5(1->0)
-      wakeup_sleep(TOTAL_IC);
-      RDS = 1;
-      for (int i = 0; i < BMS_IC[0].ic_reg.cell_channels; i++) {
-        Serial.print("current_ic:4");
-        Serial.print(" cell:");
-        Serial.print(i);
-        Serial.print("= ");
-        Serial.println(BMS_IC[4].cells.c_codes[i] * 0.0001);
-        LTC6811_set_custom_discharge(i + 1, 2, TOTAL_IC, BMS_IC);
-        LTC6811_wrcfg(TOTAL_IC, BMS_IC);
-        LTC6811_wrcfgb(TOTAL_IC, BMS_IC);
-        discharge_stat[4][i] = true;
-      }
-      break;
-
-    case 80:  // To charge battery at high current with assign relay discharging
-      wakeup_sleep(TOTAL_IC);
-      if (TOTAL_IC == 1) {
-        // input =Serial.parseInt();
-        input = select_s_pin();
-        if (input < 1 || input > 18) {
-          ;
-        } else {
-          if (state[input - 1] == 0) {
-            digitalWrite(relaypin[input - 1], LOW);
-            Serial.print("Battery ");
-            Serial.print(input);
-            Serial.println(" start to discharge");
-            state[input - 1] = 1;
-          }
-        }
-      }
-      break;
-    case 81:  // To charge battery at high current with assign relay no
-              // discharging
-      wakeup_sleep(TOTAL_IC);
-      if (TOTAL_IC == 1) {
-        // input =Serial.parseInt();
-        input = select_s_pin();
-        if (input < 1 || input > 18) {
-          ;
-        } else {
-          if (state[input - 1] == 1) {
-            digitalWrite(relaypin[input - 1], HIGH);
-            Serial.print("Battery ");
-            Serial.print(input);
-            Serial.println(" stop to discharge");
-            state[input - 1] = 0;
-          }
-        }
-      }
-      break;
-
-    case 82:  // To Charge battery at high current with all relay discharging
-      wakeup_sleep(TOTAL_IC);
-      if (TOTAL_IC == 1) {
-        Serial.println(
-            "Auto balance discharging  Start");  // Use 50mv larger than mean
-                                                 // voltage as discharge
-                                                 // threshold
-        for (int i = 0; i < 18; i++) {
-          digitalWrite(relaypin[i], LOW);
-          state[i] = 1;
-        }
-      }
-      break;
-
-    case 83:  // To Charge battery at high current with relay discharging
-      wakeup_sleep(TOTAL_IC);
-      if (TOTAL_IC == 1) {
-        float ave = 0;
-        RDS = 1;
-        Serial.println(
-            "Auto balance discharging");  // Use 50mv larger than mean voltage
-                                          // as discharge threshold
-        for (int i = 0; i < 18; i++) {
-          ave += BMS_IC[0].cells.c_codes[i];
-        }
-        ave = ave / 18;
-        for (int i = 0; i < 18; i++) {
-          if ((BMS_IC[0].cells.c_codes[i] - ave) >= 0.05) {
-            digitalWrite(relaypin[i], LOW);
-            state[i] = 1;
-          } else {
-            digitalWrite(relaypin[i], HIGH);
-            state[i] = 0;
-          }
-        }
-      }
-      break;
-
-    case 84:  // To Charge battery at high current with no relay discharging
-      wakeup_sleep(TOTAL_IC);
-      if (TOTAL_IC == 1) {
-        RDS = 0;
-        Serial.println(
-            "Auto balance discharging  Stop");  // Use 50mv larger than mean
-                                                // voltage as discharge
-                                                // threshold
-        for (int i = 0; i < 18; i++) {
-          digitalWrite(relaypin[i], HIGH);
-          state[i] = 0;
-        }
-      }
-      break;
-
-      ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-      /*
-        case 85://To Stop selected relay discharging
-          wakeup_sleep(TOTAL_IC);
-          if(TOTAL_IC==1)
-          {
-            Serial.println("Select discharge pin:");
-            s_pin_read = select_s_pin();
-            digitalWrite(s_pin_read,HIGH);
-            Serial.println("Cell->",s_pin_read,"  stop discharging");
-          }
-          break;*/
 
     case 86:  // start discharge to the lowest voltage of all cells and ICs
       wakeup_sleep(TOTAL_IC);
@@ -1778,66 +1136,6 @@ void run_command(uint32_t cmd) {
       }
       break;
 
-    case 89:  //*set* discharge of cells of selected ICs
-      Serial.println(F("Run 89, Discharge a segment!!"));
-      s_ic =
-          TOTAL_IC -
-          select_ic();  ////1->0(6->5),2->1(5->4),3->2(4->3),4->3(3->2),5->4(2->1),6->5(1->0)
-      wakeup_sleep(TOTAL_IC);
-      for (int i = 0; i < BMS_IC[0].ic_reg.cell_channels; i++) {
-        Serial.print("current_ic:");
-        Serial.print(s_ic);
-        Serial.print(" cell:");
-        Serial.print(i);
-        Serial.print("= ");
-        Serial.println(BMS_IC[s_ic].cells.c_codes[i] * 0.0001);
-        LTC6811_set_custom_discharge(i + 1, TOTAL_IC - s_ic, TOTAL_IC, BMS_IC);
-        LTC6811_wrcfg(TOTAL_IC, BMS_IC);
-        LTC6811_wrcfgb(TOTAL_IC, BMS_IC);
-        discharge_stat[s_ic][i] = true;
-      }
-      break;
-
-    case 90:  //*set* discharge of seleted cell of selected ICs
-      Serial.println(F("Set Discharge !!"));
-      s_ic =
-          TOTAL_IC -
-          select_ic();  ////1->0(6->5),2->1(5->4),3->2(4->3),4->3(3->2),5->4(2->1),6->5(1->0)
-      s_pin_read = select_s_pin();
-      wakeup_sleep(TOTAL_IC);
-      LTC6811_set_custom_discharge(s_pin_read, s_ic, TOTAL_IC, BMS_IC);
-      LTC6811_wrcfg(TOTAL_IC, BMS_IC);
-      LTC6811_wrcfgb(TOTAL_IC, BMS_IC);
-      // print_wrconfig();
-      // print_wrconfigb();
-      wakeup_idle(TOTAL_IC);
-      error = LTC6811_rdcfg(TOTAL_IC, BMS_IC);
-      check_error(error);
-      error = LTC6811_rdcfgb(TOTAL_IC, BMS_IC);
-      check_error(error);
-      // print_rxconfig();
-      // print_rxconfigb();
-      break;
-
-    case 91:  //*clear* discharge of seleted cell of selected ICs
-      Serial.println("Clear Discharge !!");
-      s_ic = TOTAL_IC - select_ic();
-      s_pin_read = select_s_pin();
-      wakeup_sleep(TOTAL_IC);
-      LTC6811_clear_custom2_discharge(s_pin_read, s_ic, TOTAL_IC, BMS_IC);
-      LTC6811_wrcfg(TOTAL_IC, BMS_IC);
-      LTC6811_wrcfgb(TOTAL_IC, BMS_IC);
-      // print_wrconfig();
-      // print_wrconfigb();
-      wakeup_idle(TOTAL_IC);
-      error = LTC6811_rdcfg(TOTAL_IC, BMS_IC);
-      check_error(error);
-      error = LTC6811_rdcfgb(TOTAL_IC, BMS_IC);
-      check_error(error);
-      // print_rxconfig();
-      // print_rxconfigb();
-      break;
-
     case 92:  // calculate minimal and maxium
       Serial.println("Run CMD92");
       wakeup_sleep(TOTAL_IC);
@@ -1882,89 +1180,6 @@ void run_command(uint32_t cmd) {
   }
 }
 
-/*!**********************************************************************************************************************************************
-  \brief For writing/reading configuration data or measuring cell voltages or
-reading aux register or reading status register in a continuous loop
-  @return void
-*************************************************************************************************************************************************/
-/*void measurement_loop(uint8_t datalog_en)
-  {
-  int8_t error = 0;
-  char input = 0;
-
-  Serial.println(F("Transmit 'm' to quit"));
-
-  while (input != 'm')
-  {
-    if (Serial.available() > 0)
-    {
-      input = read_char();
-    }
-
-    if (WRITE_CONFIG == ENABLED)
-    {
-      wakeup_idle(TOTAL_IC);
-      LTC6811_wrcfg(TOTAL_IC, BMS_IC);
-      LTC6811_wrcfgb(TOTAL_IC, BMS_IC);
-      print_wrconfig();
-      print_wrconfigb();
-    }
-
-    if (READ_CONFIG == ENABLED)
-    {
-      wakeup_idle(TOTAL_IC);
-      error = LTC6811_rdcfg(TOTAL_IC, BMS_IC);
-      check_error(error);
-      error = LTC6811_rdcfgb(TOTAL_IC, BMS_IC);
-      check_error(error);
-      print_rxconfig();
-      print_rxconfigb();
-    }
-
-    if (MEASURE_CELL == ENABLED)
-    {
-      wakeup_idle(TOTAL_IC);
-      LTC6811_adcv(ADC_CONVERSION_MODE, ADC_DCP, CELL_CH_TO_CONVERT);
-      LTC6811_pollAdc();
-      wakeup_idle(TOTAL_IC);
-      error = LTC6811_rdcv(0, TOTAL_IC, BMS_IC);
-      check_error(error);
-      print_cells(datalog_en);
-    }
-
-    if (MEASURE_AUX == ENABLED)
-    {
-      wakeup_idle(TOTAL_IC);
-      LTC6811_adax(ADC_CONVERSION_MODE, AUX_CH_ALL);
-      LTC6811_pollAdc();
-      wakeup_idle(TOTAL_IC);
-      error = LTC6811_rdaux(0, TOTAL_IC, BMS_IC); // Set to read back all aux
-  registers check_error(error); print_aux(datalog_en);
-    }
-
-    if (MEASURE_STAT == ENABLED)
-    {
-      wakeup_idle(TOTAL_IC);
-      LTC6811_adstat(ADC_CONVERSION_MODE, STAT_CH_ALL);
-      LTC6811_pollAdc();
-      wakeup_idle(TOTAL_IC);
-      error = LTC6811_rdstat(0, TOTAL_IC, BMS_IC); // Set to read back all aux
-  registers check_error(error); print_stat();
-    }
-
-    if (PRINT_PEC == ENABLED)
-    {
-      print_pec_error_count();
-    }
-
-    delay(100);
-  }
-  }
-*/
-/*!*********************************
-  \brief Prints the main menu
-  @return void
-***********************************/
 void print_menu(void) {
   Serial.println(F("List of LTC6811 Command:"));
   Serial.println(
@@ -1993,102 +1208,7 @@ void print_menu(void) {
   Serial.println(F("Please enter command: \n "));
 }
 
-/*!******************************************************************************
-  \brief Prints the configuration data that is going to be written to the
- LTC6811 to the serial port.
-  @return void
- ********************************************************************************/
-void print_wrconfig(void) {
-  int cfg_pec;
-  Serial.println(F("Written Configuration A Register: "));
-  for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-    Serial.print(F("CFGA IC "));
-    Serial.print(current_ic + 1, DEC);
-    for (int i = 0; i < 6; i++) {
-      Serial.print(F(", 0x"));
-      serial_print_hex(BMS_IC[current_ic].config.tx_data[i]);
-    }
-    Serial.print(F(", Calculated PEC: 0x"));
-    cfg_pec = pec15_calc(6, &BMS_IC[current_ic].config.tx_data[0]);
-    serial_print_hex((uint8_t)(cfg_pec >> 8));
-    Serial.print(F(", 0x"));
-    serial_print_hex((uint8_t)(cfg_pec));
-    Serial.println("\n");
-  }
-}
-
-/*!******************************************************************************
-  \brief Prints the Configuration Register B data that is going to be written to
-  the LTC6811 to the serial port.
-  @return void
- ********************************************************************************/
-void print_wrconfigb(void) {
-  int cfg_pec;
-  Serial.println(F("Written Configuration B Register: "));
-  for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-    Serial.print(F("CFGB IC "));
-    Serial.print(current_ic + 1, DEC);
-    for (int i = 0; i < 6; i++) {
-      Serial.print(F(", 0x"));
-      serial_print_hex(BMS_IC[current_ic].configb.tx_data[i]);
-    }
-    Serial.print(F(", Calculated PEC: 0x"));
-    cfg_pec = pec15_calc(6, &BMS_IC[current_ic].configb.tx_data[0]);
-    serial_print_hex((uint8_t)(cfg_pec >> 8));
-    Serial.print(F(", 0x"));
-    serial_print_hex((uint8_t)(cfg_pec));
-    Serial.println("\n");
-  }
-}
-
-/*!*****************************************************************
-  \brief Prints the configuration data that was read back from the
-  LTC6811 to the serial port.
-  @return void
- *******************************************************************/
-void print_rxconfig(void) {
-  Serial.println(F("Received Configuration A Register: "));
-  for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-    Serial.print(F("CFGA IC "));
-    Serial.print(current_ic + 1, DEC);
-    for (int i = 0; i < 6; i++) {
-      Serial.print(F(", 0x"));
-      serial_print_hex(BMS_IC[current_ic].config.rx_data[i]);
-    }
-    Serial.print(F(", Received PEC: 0x"));
-    serial_print_hex(BMS_IC[current_ic].config.rx_data[6]);
-    Serial.print(F(", 0x"));
-    serial_print_hex(BMS_IC[current_ic].config.rx_data[7]);
-    Serial.println("\n");
-  }
-}
-
-/*!*****************************************************************
-  \brief Prints the Configuration Register B that was read back from
-  the LTC6811 to the serial port.
-  @return void
- *******************************************************************/
-void print_rxconfigb(void) {
-  Serial.println(F("Received Configuration B Register: "));
-  for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-    Serial.print(F("CFGB IC "));
-    Serial.print(current_ic + 1, DEC);
-    for (int i = 0; i < 6; i++) {
-      Serial.print(F(", 0x"));
-      serial_print_hex(BMS_IC[current_ic].configb.rx_data[i]);
-    }
-    Serial.print(F(", Received PEC: 0x"));
-    serial_print_hex(BMS_IC[current_ic].configb.rx_data[6]);
-    Serial.print(F(", 0x"));
-    serial_print_hex(BMS_IC[current_ic].configb.rx_data[7]);
-    Serial.println("\n");
-  }
-}
-
-/*!************************************************************
-  \brief Prints cell voltage codes to the serial port
-  @return void
- *************************************************************/
+// using
 void print_cells(uint8_t datalog_en) {
   for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
     if (datalog_en == 0) {
@@ -2114,512 +1234,7 @@ void print_cells(uint8_t datalog_en) {
   Serial.println("\n");
 }
 
-/*!****************************************************************************
-  \brief Prints GPIO voltage codes and Vref2 voltage code onto the serial port
-  @return void
- *****************************************************************************/
-void print_aux(uint8_t datalog_en) {
-  for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-    if (datalog_en == 0) {
-      Serial.print(" IC ");
-      Serial.print(current_ic + 1, DEC);
-      for (int i = 0; i < 5; i++) {
-        Serial.print(F(" GPIO-"));
-        Serial.print(i + 1, DEC);
-        Serial.print(":");
-        Serial.print(BMS_IC[current_ic].aux.a_codes[i] * 0.0001, 4);
-        Serial.print(",");
-      }
-
-      for (int i = 6; i < 10; i++) {
-        Serial.print(F(" GPIO-"));
-        Serial.print(i, DEC);
-        Serial.print(":");
-        Serial.print(BMS_IC[current_ic].aux.a_codes[i] * 0.0001, 4);
-      }
-
-      Serial.print(F(" Vref2"));
-      Serial.print(":");
-      Serial.print(BMS_IC[current_ic].aux.a_codes[5] * 0.0001, 4);
-      Serial.println();
-
-      Serial.print(" OV/UV Flags : 0x");
-      Serial.print((uint8_t)BMS_IC[current_ic].aux.a_codes[11], HEX);
-      Serial.println();
-    } else {
-      Serial.print(" AUX, ");
-
-      for (int i = 0; i < 12; i++) {
-        Serial.print((uint8_t)BMS_IC[current_ic].aux.a_codes[i] * 0.0001, 4);
-        Serial.print(",");
-      }
-    }
-  }
-  Serial.println("\n");
-}
-
-/*!****************************************************************************
-  \brief Prints Status voltage codes and Vref2 voltage code onto the serial port
-  @return void
- *****************************************************************************/
-void print_stat(void) {
-  for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-    double itmp;
-
-    Serial.print(F(" IC "));
-    Serial.print(current_ic + 1, DEC);
-    Serial.print(F(" SOC:"));
-    Serial.print(BMS_IC[current_ic].stat.stat_codes[0] * 0.0001 * 30, 4);
-    Serial.print(F(","));
-    Serial.print(F(" Itemp:"));
-    itmp =
-        (double)((BMS_IC[current_ic].stat.stat_codes[1] * (0.0001 / 0.0076)) -
-                 276);  // Internal Die Temperature(°C) = ITMP • (100 µV
-                        // / 7.6mV)°C - 276°C
-    Serial.print(itmp, 4);
-    Serial.print(F(","));
-    Serial.print(F(" VregA:"));
-    Serial.print(BMS_IC[current_ic].stat.stat_codes[2] * 0.0001, 4);
-    Serial.print(F(","));
-    Serial.print(F(" VregD:"));
-    Serial.print(BMS_IC[current_ic].stat.stat_codes[3] * 0.0001, 4);
-    Serial.println();
-    Serial.print(F(" OV/UV Flags:"));
-    Serial.print(F(", 0x"));
-    serial_print_hex(BMS_IC[current_ic].stat.flags[0]);
-    Serial.print(F(", 0x"));
-    serial_print_hex(BMS_IC[current_ic].stat.flags[1]);
-    Serial.print(F(", 0x"));
-    serial_print_hex(BMS_IC[current_ic].stat.flags[2]);
-    Serial.print(F("\tMux fail flag:"));
-    Serial.print(F(", 0x"));
-    serial_print_hex(BMS_IC[current_ic].stat.mux_fail[0]);
-    Serial.print(F("\tTHSD:"));
-    Serial.print(F(", 0x"));
-    serial_print_hex(BMS_IC[current_ic].stat.thsd[0]);
-    Serial.println();
-  }
-  Serial.println("\n");
-}
-
-/*!****************************************************************************
-  \brief Prints GPIO voltage codes (GPIO 1 & 2)
-  @return void
- *****************************************************************************/
-void print_aux1(uint8_t datalog_en) {
-  for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-    if (datalog_en == 0) {
-      Serial.print(" IC ");
-      Serial.print(current_ic + 1, DEC);
-      for (int i = 0; i < 2; i++) {
-        Serial.print(F(" GPIO-"));
-        Serial.print(i + 1, DEC);
-        Serial.print(F(":"));
-        Serial.print(BMS_IC[current_ic].aux.a_codes[i] * 0.0001, 4);
-        Serial.print(F(","));
-      }
-    } else {
-      Serial.print(F("AUX, "));
-
-      for (int i = 0; i < 12; i++) {
-        Serial.print(BMS_IC[current_ic].aux.a_codes[i] * 0.0001, 4);
-        Serial.print(F(","));
-      }
-    }
-  }
-  Serial.println("\n");
-}
-
-/*!****************************************************************************
-  \brief Prints Status voltage codes for SOC onto the serial port6
- *****************************************************************************/
-void print_sumofcells(void) {
-  for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-    Serial.print(F(" IC "));
-    Serial.print(current_ic + 1, DEC);
-    Serial.print(F(" SOC:"));
-    Serial.print(BMS_IC[current_ic].stat.stat_codes[0] * 0.0001 * 30, 4);
-    Serial.print(F(","));
-  }
-  Serial.println("\n");
-}
-
-void print_avgofvoltage(void) {
-  for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-    Serial.print(F(" IC "));
-    Serial.print(current_ic + 1, DEC);
-    Serial.print(F(" AOV:"));
-    Serial.print(BMS_IC[current_ic].stat.stat_codes[0] * 0.0001 * 30 / 18, 4);
-    Serial.print(F(","));
-  }
-  Serial.println("\n");
-}
-
-/*!****************************************************************
-  \brief Function to check the MUX fail bit in the Status Register
-   @return void
-*******************************************************************/
-void check_mux_fail(void) {
-  int8_t error = 0;
-  for (int ic = 0; ic < TOTAL_IC; ic++) {
-    Serial.print(" IC ");
-    Serial.println(ic + 1, DEC);
-    if (BMS_IC[ic].stat.mux_fail[0] != 0) error++;
-
-    if (error == 0)
-      Serial.println(F("Mux Test: PASS \n"));
-    else
-      Serial.println(F("Mux Test: FAIL \n"));
-  }
-}
-
-/*!************************************************************
-  \brief Prints Errors Detected during self test
-   @return void
-*************************************************************/
-void print_selftest_errors(uint8_t adc_reg, int8_t error) {
-  if (adc_reg == 1) {
-    Serial.println("Cell ");
-  } else if (adc_reg == 2) {
-    Serial.println("Aux ");
-  } else if (adc_reg == 3) {
-    Serial.println("Stat ");
-  }
-  Serial.print(error, DEC);
-  Serial.println(F(" : errors detected in Digital Filter and Memory \n"));
-}
-
-/*!************************************************************
-  \brief Prints the output of  the ADC overlap test
-   @return void
-*************************************************************/
-void print_overlap_results(int8_t error) {
-  if (error == 0)
-    Serial.println(F("Overlap Test: PASS \n"));
-  else
-    Serial.println(F("Overlap Test: FAIL \n"));
-}
-
-/*!************************************************************
-  \brief Prints Errors Detected during Digital Redundancy test
-   @return void
-*************************************************************/
-void print_digital_redundancy_errors(uint8_t adc_reg, int8_t error) {
-  if (adc_reg == 2) {
-    Serial.println("Aux ");
-  } else if (adc_reg == 3) {
-    Serial.println("Stat ");
-  }
-
-  Serial.print(error, DEC);
-  Serial.println(F(" : errors detected in Measurement \n"));
-}
-
-/*!****************************************************************************
-  \brief Prints Open wire test results to the serial port
- *****************************************************************************/
-void print_open_wires(void) {
-  for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-    if (BMS_IC[current_ic].system_open_wire == 65535) {
-      Serial.print("No Opens Detected on IC ");
-      Serial.print(current_ic + 1, DEC);
-      Serial.println();
-    } else {
-      Serial.print(F("There is an open wire on IC "));
-      Serial.print(current_ic + 1, DEC);
-      Serial.print(F(" Channel: "));
-      Serial.println(BMS_IC[current_ic].system_open_wire);
-    }
-  }
-  Serial.println("\n");
-}
-
-/*!****************************************************************************
-   \brief Function to print the number of PEC Errors
-   @return void
- *****************************************************************************/
-void print_pec_error_count(void) {
-  for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-    Serial.println("");
-    Serial.print(BMS_IC[current_ic].crc_count.pec_count, DEC);
-    Serial.print(F(" : PEC Errors Detected on IC"));
-    Serial.println(current_ic + 1, DEC);
-  }
-  Serial.println("\n");
-}
-
-/*!****************************************************
-  \brief Function to select the S pin for discharge
-  @return void
- ******************************************************/
-int8_t select_s_pin(void) {
-  int8_t read_s_pin = 0;
-
-  Serial.print(F("Please enter the Spin number: "));
-  read_s_pin = (int8_t)read_int();
-  Serial.println(read_s_pin);
-  return (read_s_pin);
-}
-
-/*!****************************************************
-  \brief Function to select the IC for discharge
-  @return void
- ******************************************************/
-int8_t select_ic(void) {
-  int8_t read_s_ic = 0;
-
-  Serial.print(F("Please enter the ic number: "));
-  read_s_ic = (int8_t)read_int();
-  Serial.println(read_s_ic);
-  return (read_s_ic);
-}
-
-/*!****************************************************************************
-  \brief prints data which is written on PWM register onto the serial port
-  @return void
- *****************************************************************************/
-void print_wrpwm(void) {
-  int pwm_pec;
-
-  Serial.println(F("Written PWM Configuration: "));
-  for (uint8_t current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-    Serial.print(F("IC "));
-    Serial.print(current_ic + 1, DEC);
-    for (int i = 0; i < 6; i++) {
-      Serial.print(F(", 0x"));
-      serial_print_hex(BMS_IC[current_ic].pwm.tx_data[i]);
-    }
-    Serial.print(F(", Calculated PEC: 0x"));
-    pwm_pec = pec15_calc(6, &BMS_IC[current_ic].pwm.tx_data[0]);
-    serial_print_hex((uint8_t)(pwm_pec >> 8));
-    Serial.print(F(", 0x"));
-    serial_print_hex((uint8_t)(pwm_pec));
-    Serial.println("\n");
-  }
-}
-
-/*!****************************************************************************
-  \brief Prints received data from PWM register onto the serial port
-  @return void
- *****************************************************************************/
-void print_rxpwm(void) {
-  Serial.println(F("Received pwm Configuration:"));
-  for (uint8_t current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-    Serial.print(F("IC "));
-    Serial.print(current_ic + 1, DEC);
-    for (int i = 0; i < 6; i++) {
-      Serial.print(F(", 0x"));
-      serial_print_hex(BMS_IC[current_ic].pwm.rx_data[i]);
-    }
-    Serial.print(F(", Received PEC: 0x"));
-    serial_print_hex(BMS_IC[current_ic].pwm.rx_data[6]);
-    Serial.print(F(", 0x"));
-    serial_print_hex(BMS_IC[current_ic].pwm.rx_data[7]);
-    Serial.println("\n");
-  }
-}
-
-/*!****************************************************************************
-  \brief prints data which is written on S Control register
-  @return void
- *****************************************************************************/
-void print_wrsctrl(void) {
-  int sctrl_pec;
-
-  Serial.println(F("Written Data in Sctrl register: "));
-  for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-    Serial.print(F(" IC: "));
-    Serial.print(current_ic + 1, DEC);
-    Serial.print(F(" Sctrl register group:"));
-    for (int i = 0; i < 6; i++) {
-      Serial.print(F(", 0x"));
-      serial_print_hex(BMS_IC[current_ic].sctrl.tx_data[i]);
-    }
-
-    Serial.print(F(", Calculated PEC: 0x"));
-    sctrl_pec = pec15_calc(6, &BMS_IC[current_ic].sctrl.tx_data[0]);
-    serial_print_hex((uint8_t)(sctrl_pec >> 8));
-    Serial.print(F(", 0x"));
-    serial_print_hex((uint8_t)(sctrl_pec));
-    Serial.println("\n");
-  }
-}
-
-/*!****************************************************************************
-  \brief prints data which is read back from S Control register
-  @return void
- *****************************************************************************/
-void print_rxsctrl(void) {
-  Serial.println(F("Received Data:"));
-  for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-    Serial.print(F(" IC "));
-    Serial.print(current_ic + 1, DEC);
-
-    for (int i = 0; i < 6; i++) {
-      Serial.print(F(", 0x"));
-      serial_print_hex(BMS_IC[current_ic].sctrl.rx_data[i]);
-    }
-
-    Serial.print(F(", Received PEC: 0x"));
-    serial_print_hex(BMS_IC[current_ic].sctrl.rx_data[6]);
-    Serial.print(F(", 0x"));
-    serial_print_hex(BMS_IC[current_ic].sctrl.rx_data[7]);
-    Serial.println("\n");
-  }
-}
-
-/*!****************************************************************************
-  \brief Prints data which is written on PWM/S control register group B onto
-  the serial port
-   @return void
- *****************************************************************************/
-void print_wrpsb(uint8_t type) {
-  int psb_pec = 0;
-
-  Serial.println(F(" PWM/S control register group B: "));
-  for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-    if (type == 1) {
-      Serial.print(F(" IC: "));
-      Serial.println(current_ic + 1, DEC);
-      Serial.print(F(" 0x"));
-      serial_print_hex(BMS_IC[current_ic].pwmb.tx_data[0]);
-      Serial.print(F(", 0x"));
-      serial_print_hex(BMS_IC[current_ic].pwmb.tx_data[1]);
-      Serial.print(F(", 0x"));
-      serial_print_hex(BMS_IC[current_ic].pwmb.tx_data[2]);
-
-      Serial.print(F(", Calculated PEC: 0x"));
-      psb_pec = pec15_calc(6, &BMS_IC[current_ic].pwmb.tx_data[0]);
-      serial_print_hex((uint8_t)(psb_pec >> 8));
-      Serial.print(F(", 0x"));
-      serial_print_hex((uint8_t)(psb_pec));
-      Serial.println("\n");
-    } else if (type == 2) {
-      Serial.print(F(" IC: "));
-      Serial.println(current_ic + 1, DEC);
-      Serial.print(F(" 0x"));
-      serial_print_hex(BMS_IC[current_ic].sctrlb.tx_data[3]);
-      Serial.print(F(", 0x"));
-      serial_print_hex(BMS_IC[current_ic].sctrlb.tx_data[4]);
-      Serial.print(F(", 0x"));
-      serial_print_hex(BMS_IC[current_ic].sctrlb.tx_data[5]);
-
-      Serial.print(F(", Calculated PEC: 0x"));
-      psb_pec = pec15_calc(6, &BMS_IC[current_ic].sctrlb.tx_data[0]);
-      serial_print_hex((uint8_t)(psb_pec >> 8));
-      Serial.print(F(", 0x"));
-      serial_print_hex((uint8_t)(psb_pec));
-      Serial.println("\n");
-    }
-  }
-}
-
-/*!****************************************************************************
-  \brief Prints received data from PWM/S control register group B
-   onto the serial port
-   @return void
- *****************************************************************************/
-void print_rxpsb(uint8_t type) {
-  Serial.println(F(" PWM/S control register group B:"));
-  if (type == 1) {
-    for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-      Serial.print(F(" IC: "));
-      Serial.print(F(" 0x"));
-      serial_print_hex(BMS_IC[current_ic].pwmb.rx_data[0]);
-      Serial.print(F(", 0x"));
-      serial_print_hex(BMS_IC[current_ic].pwmb.rx_data[1]);
-      Serial.print(F(", 0x"));
-      serial_print_hex(BMS_IC[current_ic].pwmb.rx_data[2]);
-
-      Serial.print(F(", Received PEC: 0x"));
-      serial_print_hex(BMS_IC[current_ic].pwmb.rx_data[6]);
-      Serial.print(F(", 0x"));
-      serial_print_hex(BMS_IC[current_ic].pwmb.rx_data[7]);
-      Serial.println("\n");
-    }
-  } else if (type == 2) {
-    for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-      Serial.print(F(" IC: "));
-      Serial.println(current_ic + 1, DEC);
-      Serial.print(F(" 0x"));
-      serial_print_hex(BMS_IC[current_ic].sctrlb.rx_data[3]);
-      Serial.print(F(", 0x"));
-      serial_print_hex(BMS_IC[current_ic].sctrlb.rx_data[4]);
-      Serial.print(F(", 0x"));
-      serial_print_hex(BMS_IC[current_ic].sctrlb.rx_data[5]);
-
-      Serial.print(F(", Received PEC: 0x"));
-      serial_print_hex(BMS_IC[current_ic].sctrlb.rx_data[6]);
-      Serial.print(F(", 0x"));
-      serial_print_hex(BMS_IC[current_ic].sctrlb.rx_data[7]);
-      Serial.println("\n");
-    }
-  }
-}
-
-/*!****************************************************************************
-  \brief prints data which is written on COMM register onto the serial port
-  @return void
- *****************************************************************************/
-void print_wrcomm(void) {
-  int comm_pec;
-
-  Serial.println(F("Written Data in COMM Register: "));
-  for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-    Serial.print(F(" IC- "));
-    Serial.print(current_ic + 1, DEC);
-
-    for (int i = 0; i < 6; i++) {
-      Serial.print(F(", 0x"));
-      serial_print_hex(BMS_IC[current_ic].com.tx_data[i]);
-    }
-    Serial.print(F(", Calculated PEC: 0x"));
-    comm_pec = pec15_calc(6, &BMS_IC[current_ic].com.tx_data[0]);
-    serial_print_hex((uint8_t)(comm_pec >> 8));
-    Serial.print(F(", 0x"));
-    serial_print_hex((uint8_t)(comm_pec));
-    Serial.println("\n");
-  }
-}
-
-/*!****************************************************************************
-  \brief Prints received data from COMM register onto the serial port
-  @return void
- *****************************************************************************/
-void print_rxcomm(void) {
-  Serial.println(F("Received Data in COMM register:"));
-  for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-    Serial.print(F(" IC- "));
-    Serial.print(current_ic + 1, DEC);
-
-    for (int i = 0; i < 6; i++) {
-      Serial.print(F(", 0x"));
-      serial_print_hex(BMS_IC[current_ic].com.rx_data[i]);
-    }
-    Serial.print(F(", Received PEC: 0x"));
-    serial_print_hex(BMS_IC[current_ic].com.rx_data[6]);
-    Serial.print(F(", 0x"));
-    serial_print_hex(BMS_IC[current_ic].com.rx_data[7]);
-    Serial.println("\n");
-  }
-}
-
-/*!********************************************************************
-  \brief Function to check the Mute bit in the Configuration Register
-   @return void
-**********************************************************************/
-void check_mute_bit(void) {
-  for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-    Serial.print(F(" Mute bit in Configuration Register B: 0x"));
-    serial_print_hex((BMS_IC[current_ic].configb.rx_data[1]) & (0x80));
-    Serial.println("\n");
-  }
-}
-
-/*!****************************************************************************
-  \brief Function to print the Conversion Time
-  @return void
- *****************************************************************************/
+// semi-not using
 void print_conv_time(uint32_t conv_time) {
   uint16_t m_factor = 1000;  // to print in ms
 
@@ -2628,26 +1243,17 @@ void print_conv_time(uint32_t conv_time) {
   Serial.println(F("ms \n"));
 }
 
-/*!****************************************************************************
-  \brief Function to check error flag and print PEC error message
-  @return void
- *****************************************************************************/
+// using
 void check_error(int error) {
   if (error == -1) {
     Serial.println(F("A PEC error was detected in the received data"));
   }
 }
 
-/*!************************************************************
-  \brief Function to print text on serial monitor
-  @return void
-*************************************************************/
+// using
 void serial_print_text(char data[]) { Serial.println(data); }
 
-/*!****************************************************************************
-   \brief Function to print in HEX form
-   @return void
- *****************************************************************************/
+// using
 void serial_print_hex(uint8_t data) {
   if (data < 16) {
     Serial.print("0");
@@ -2656,46 +1262,17 @@ void serial_print_hex(uint8_t data) {
     Serial.print((byte)data, HEX);
 }
 
-/*!*****************************************************************************
-  \brief Hex conversion constants
- *******************************************************************************/
-char hex_digits[16] = {'0', '1', '2', '3', '4', '5', '6', '7',
-                       '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
-
-/*!************************************************************
-  \brief Global Variables
- *************************************************************/
+// using
 char hex_to_byte_buffer[5] = {'0', 'x', '0', '0', '\0'};
 
-/*!************************************************************
-  \brief Buffer for ASCII hex to byte conversion
- *************************************************************/
-char byte_to_hex_buffer[3] = {'\0', '\0', '\0'};
-
-/*!*****************************************************************************
-  \brief Read 2 hex characters from the serial buffer and convert them to a byte
-  @return char data Read Data
- ******************************************************************************/
-char read_hex(void) {
-  byte data;
-  hex_to_byte_buffer[2] = get_char();
-  hex_to_byte_buffer[3] = get_char();
-  get_char();
-  get_char();
-  data = strtol(hex_to_byte_buffer, NULL, 0);
-  return (data);
-}
-
-/*!************************************************************
-  \brief Read a command from the serial port
-  @return char
- *************************************************************/
+// using
 char get_char(void) {
   // read a command from the serial port
   while (Serial.available() <= 0);
   return (Serial.read());
 }
 
+// using
 void maxerror(int CURIC, int err) {
   maxfault[CURIC] = maxfault[CURIC] + err;
   MXcount++;
@@ -2719,6 +1296,7 @@ void maxerror(int CURIC, int err) {
   }
 }
 
+// using
 void minerror(int CURIC, int err) {
   minfault[CURIC] = minfault[CURIC] + err;
   MIcount++;
@@ -2739,73 +1317,5 @@ void minerror(int CURIC, int err) {
       }
     }
     MIcount = 0;
-  }
-}
-
-void maxavererror(int CURIC, int err) {
-  maxaverfault[CURIC] = maxaverfault[CURIC] + err;
-  MXavercount++;
-  if (MXavercount == TOTAL_IC) {
-    for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-      if (maxaverfault[current_ic] > 3) {
-        shutdown_status = false;
-        Serial.print("current ic=");
-        Serial.print(current_ic);
-        Serial.println(" Maxaver error fault");
-        emergency_error[2] = 1;
-      } else {
-        Serial.print("current ic=");
-        Serial.print(current_ic);
-        Serial.println(" Maxaver error fine");
-        Serial.print("Maxaver fault = ");
-        Serial.println(maxaverfault[CURIC]);
-      }
-    }
-    MXavercount = 0;
-  }
-}
-void minavererror(int CURIC, int err) {
-  minaverfault[CURIC] = minaverfault[CURIC] + err;
-  MIavercount++;
-  if (MIavercount == TOTAL_IC) {
-    for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-      if (minaverfault[current_ic] > 3) {
-        shutdown_status = false;
-        Serial.print("current ic=");
-        Serial.print(current_ic);
-        Serial.println(" Minaver error fault");
-        emergency_error[3] = 1;
-      } else {
-        Serial.print("current ic=");
-        Serial.print(current_ic);
-        Serial.println(" Minaver error fine");
-        Serial.print("Minaver fault = ");
-        Serial.println(minaverfault[CURIC]);
-      }
-    }
-    MIavercount = 0;
-  }
-}
-
-void differror(int CURIC, int err) {
-  difffault[CURIC] = difffault[CURIC] + err;
-  Diffcount++;
-  if (Diffcount == TOTAL_IC) {
-    for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-      if (difffault[current_ic] > 3) {
-        shutdown_status = false;
-        Serial.print("current ic=");
-        Serial.print(current_ic);
-        Serial.println(" Diff error fault");
-        emergency_error[4] = 1;
-      } else {
-        Serial.print("current ic=");
-        Serial.print(current_ic);
-        Serial.println(" Diff error fine");
-        Serial.print("Diff fault = ");
-        Serial.println(difffault[CURIC]);
-      }
-    }
-    Diffcount = 0;
   }
 }
