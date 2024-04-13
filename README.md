@@ -28,7 +28,7 @@
 
 打開 Arduino IDE 然後按照 [Environment](https://hackmd.io/@nckufs/ryvS1uIgA#Environment) 這邊的方式去選擇函式庫的參考路徑，最後回到程式碼的主頁試著點左上方的勾勾編譯看看，如果成功的話就沒問題了，如果有問題的話就問**張庭瑋**或**簡誌加**吧。  
 
-![image](https://hackmd.io/_uploads/rkq5oYIe0.png =400x)  
+![image](https://hackmd.io/_uploads/rkq5oYIe0.png)  
 > Mac 的 Arduino IDE 要從這邊設定函式庫參考路徑  
 
 
