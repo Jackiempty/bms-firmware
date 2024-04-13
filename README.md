@@ -9,7 +9,8 @@
 * Arduino Dual
 
 # Environment
-在進到正題之前，有幾個小常識需要向大家補充，首先是我們在 Arduino IDE 的設定裡面可以找到我們原生的函式庫檔案路徑，不論你是 Windows 或是 Mac，這個路徑的預設是`home/Documents/Arduino`，在`Arduino/`底下就有一個`library`的資料夾。  
+Before entering the topic, there's a few prerequisite knowledge to let you know. First of all, we can find the default library path inside the setting of Arduino IDE, no matter you are using Windows of Mac, the default path should be `home/Documents/Arduino` and under the folder `Arduino` is the `library` folder.  
+
 
 而如果要能夠操作 Anolog Device 的 LTS 系列函式庫的話，則需要上到官方的 Github 去下載他們專屬的函式庫`LTSketchbook`並到 Arduino IDE 的設定裡面去手動將函式庫的參考路徑改成這個資料夾  
 
