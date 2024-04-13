@@ -44,4 +44,8 @@ Before entering the topic, there's a few prerequisite knowledge to let you know.
 ![image](https://hackmd.io/_uploads/r1Rg15UxC.png)  
 > 介面的上半部長這樣，可以看到參考路徑，因為有 OneDrive 的關係，每個人有可能不太一樣  
 
+# Epilogue
+This is a simple tutorial for anyone who's new to the battery to understand the mechanism of how to operate BMS system.  
+But it is just a start, our goal is to totally rewrite the whole program and then make the poject more easy to read and maintain, the current document will keep being updated  
 
+Also, if there's any part that you don't understand, please don't be hasitate to leave a comment with your account in `HackMD`, as long as we notice your comment, we can improve the tutorial and make it better for anyone to understand.  
