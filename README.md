@@ -1,8 +1,10 @@
+[繁體中文](https://github.com/ncku-formula-racing/bms-firmware/blob/main/README_CH.md)
+
 # Intro
 
 [![hackmd-github-sync-badge](https://hackmd.io/2i-s6kk5SbGv-v5dF11x8w/badge)](https://hackmd.io/2i-s6kk5SbGv-v5dF11x8w)
 
-歡迎你來到電池組，在這裡我要教你如何建立可以編譯並上傳 BMS 韌體的程式的環境  
+Welcome to the accumulator team, you will learm how to compile and upload the firmware of BMS up to the control board of accumulator here  
 
 # Prerequisite
 * Arduino IDE
@@ -11,41 +13,36 @@
 # Environment
 Before entering the topic, there's a few prerequisite knowledge to let you know. First of all, we can find the default library path inside the setting of Arduino IDE, no matter you are using Windows of Mac, the default path should be `home/Documents/Arduino` and under the folder `Arduino` is the `library` folder.  
 
+As for the LTS series library of Anolog Device, you have to download their exclusive library called `LTSketchbook` from their official Github and go to the setting of your Arduino IDE to change the reference path of the library to it.  
 
-而如果要能夠操作 Anolog Device 的 LTS 系列函式庫的話，則需要上到官方的 Github 去下載他們專屬的函式庫`LTSketchbook`並到 Arduino IDE 的設定裡面去手動將函式庫的參考路徑改成這個資料夾  
+However, in the scenario this time, we cannot apply the method above to access the functions of the LTS series library, since our inherited code and library had been modefied by our senior member so that it is either the version they used is so old or that they had changed the code in both the sample code and the library that we cannot access the API of LTS library by the regular way.  
 
-然而，本次的環境架設無法將這兩個方法套用，因為我們的祖傳程式碼貌似被大學長們魔改過，所以包括 Arduino 的原生函式庫和 LTS 的官方函式庫在內，都有被修改過，要不就是現有版本跟祖傳的版本差異大到有些 API 已經不存在，所以在祖傳程式碼裡面所調用的 API 有些是學長自己加的或是跟原本不一樣的，導致你必須要將函式庫連同原始程式碼一起祖傳，是個非常母湯的做法 (所以我們的張庭瑋 aka 救世主說要重寫)，但目前還是得將這個現狀個操作方法記錄起來  
+To sum up, it is not only the source code that is inherited but also the library, which is quite horrible(so 張庭瑋 aka our savior suggest that we rebuild the whole stuff from scratch). But for now, we teach you the solution just in case.
 
 ## LTSketchbook
 
-基本上就是去[這個網站](https://github.com/analogdevicesinc/Linduino)然後按照上面的方法做就可以了  
+Basically you go to [this website](https://github.com/analogdevicesinc/Linduino) and follow the steps above  
 
 ## bms-firmware environment setup
 
-說了那麼多，回到正題：  
-所有架設環境的相關檔案都已經上傳到 [Github](https://github.com/ncku-formula-racing/bms-firmware) 了，所以你只要把他 clone 下來或是直接下載 zip 檔解壓縮後就可以使用，重點是下載下來之後有哪些步驟需要執行。  
+Ok, back to the topic:  
+All the file and documents that you need for setting up the environment are uploaded to [Github](https://github.com/ncku-formula-racing/bms-firmware), so the only thing you have to do is to either clone it to your local repository or download the zip and uncompress it, the point is the progresses that you have to execute after downloading the file.  
 
-首先，看你要不要把祖傳的 library 檔案移到`home/Documents/`去，這樣就可以統一所有文件的位置，將來不管是要切回去原本的`home/Documents/Arduino`還是要再切回來都比較好找到，因為就在同一個位置。  
-
-打開 Arduino IDE 然後按照 [Environment](https://hackmd.io/@nckufs/ryvS1uIgA#Environment) 這邊的方式去選擇函式庫的參考路徑，最後回到程式碼的主頁試著點左上方的勾勾編譯看看，如果成功的話就沒問題了，如果有問題的話就問**張庭瑋**或**簡誌加**吧。  
-
-![image](https://hackmd.io/_uploads/rkq5oYIe0.png)  
-> Mac 的 Arduino IDE 要從這邊設定函式庫參考路徑  
-
+Start up your Arduino IDE and follow the step in [Environment](https://hackmd.io/@nckufs/ryvS1uIgA#Environment) to select the reference path of your library, after that, go back to the main page of your code and then try to click the `verify` buttom and see if it can be compiled properly or not. If you succeeded then it will be fine, but in case of you having any problem, leave a comment or go ask **簡誌加** or **張庭瑋**.  
 
 ![image](https://hackmd.io/_uploads/BJIMAK8xR.png)  
-> 介面長這樣  
+> The UI looks like this
 
 
 ![image](https://hackmd.io/_uploads/BJAuAt8xA.png)  
-> Windows 的 Arduino IDE 要從這邊設定函式庫參考路徑  
+> You set your library path this way with a Windows  
 
 
 ![image](https://hackmd.io/_uploads/r1Rg15UxC.png)  
-> 介面的上半部長這樣，可以看到參考路徑，因為有 OneDrive 的關係，每個人有可能不太一樣  
+> The upper half if UI looks like this, the path may varies due to the existance of OneDrive  
 
 # Epilogue
 This is a simple tutorial for anyone who's new to the battery to understand the mechanism of how to operate BMS system.  
 But it is just a start, our goal is to totally rewrite the whole program and then make the poject more easy to read and maintain, the current document will keep being updated  
 
-Also, if there's any part that you don't understand, please don't be hasitate to leave a comment with your account in `HackMD`, as long as we notice your comment, we can improve the tutorial and make it better for anyone to understand.  
+Also, if there's any part that you don't understand, please don't be hesitate to leave a comment with your account in `HackMD`, as long as we notice your comment, we can improve the tutorial and make it better for anyone to understand.  
