@@ -20,6 +20,13 @@ void stop_discharge();
 void starttowork();
 void calculate();
 
+/*******************************************************************
+  Setup Variables
+  The following variables can be modified to configure the software.
+********************************************************************/
+const uint8_t TOTAL_IC = 10;//!< Number of ICs in the daisy chain
+
+
 void setup() {
   Serial.begin(115200);
   quikeval_SPI_connect();
@@ -32,19 +39,64 @@ void setup() {
   }
   LTC6811_reset_crc_count(TOTAL_IC, BMS_IC);
   LTC6811_init_reg_limits(TOTAL_IC, BMS_IC);
-  // print_menu();
+// ******************************************************************
+  Serial.begin(115200);
+  for (int i = 0; i < 18; i++) {
+    pinMode(relaypin[i], OUTPUT);
+    digitalWrite(relaypin[i], HIGH);
+  }
+  quikeval_SPI_connect();
+  spi_enable(
+      SPI_CLOCK_DIV16);  // This will set the Linduino to have a 1MHz Clock
+  LTC6811_init_cfg(TOTAL_IC, BMS_IC);
+  LTC6811_init_cfgb(TOTAL_IC, BMS_IC);
+
+  for (uint8_t current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
+    LTC6811_set_cfgr(current_ic, BMS_IC, REFON, ADCOPT, GPIOBITS_A, DCCBITS_A,
+                     DCTOBITS, 24000, 37300);  //!< Under voltage Over voltage
+    LTC6811_set_cfgrb(current_ic, BMS_IC, FDRF, DTMEN, PSBITS, GPIOBITS_B,
+                      DCCBITS_B);
+  }
+  shutdown_status = true;
+  LTC6811_reset_crc_count(TOTAL_IC, BMS_IC);
+  LTC6811_init_reg_limits(TOTAL_IC, BMS_IC);
+  print_menu();
+
+  for (int i = 0; i < 18; i++)  // Initialize the variable array
+  {
+    vmin[i] = 5;
+    // consvmax[i] = 5;
+  }
+  starttowork();
+  delay(100);
+  Serial.println("1st starttowork completed");
+  // temp_detect();
+  voltage_print();
+  Serial.println("1st voltage_print completed");
+  stat_print.every(
+      1500, starttowork1);  // Starttowork (loop routine/2s) : 1.calculate min
+                            // and MAX of cell/ICs 2.Printout the Info. of
+                            // Cell 3.check if start balance
+  update_vol.every(
+      1500, voltage_print);  // voltage_update(loop routine/500ms):1.Renew the
+                             // min and MAX of cell/ICs 2.Send message to the
+                             // CAN bus 3.check the error_avg.
+
+  // clear all discharge before the Reset
+  wakeup_sleep(TOTAL_IC);
+  LTC6811_clear_discharge(TOTAL_IC, BMS_IC);
+  LTC6811_wrcfg(TOTAL_IC, BMS_IC);
+  
+  pinMode(BMS_FAULT_PIN, OUTPUT);
+  randomSeed(analogRead(A5));  // Random SOC
+  SD.begin(4);
+  // SD.remove("BMS_1.txt");
+  Can0.begin(CAN_BPS_500K);
+  Can0.watchFor();
+
 }
 
 void loop() {
-  if (RDS >= 1) {
-    RDS += 1;
-  }
-  if (RDS == 5000000) {
-    run_command(88);
-    delay(1000);
-    run_command(87);
-    RDS = 1;
-  }
 
   stat_print.update();
   update_vol.update();
