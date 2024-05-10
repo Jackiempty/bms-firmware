@@ -39,7 +39,9 @@ void setup() {
   }
   LTC6811_reset_crc_count(TOTAL_IC, BMS_IC);
   LTC6811_init_reg_limits(TOTAL_IC, BMS_IC);
+
 // ******************************************************************
+
   Serial.begin(115200);
   for (int i = 0; i < 18; i++) {
     pinMode(relaypin[i], OUTPUT);
@@ -49,29 +51,23 @@ void setup() {
   spi_enable(
       SPI_CLOCK_DIV16);  // This will set the Linduino to have a 1MHz Clock
   LTC6811_init_cfg(TOTAL_IC, BMS_IC);
-  LTC6811_init_cfgb(TOTAL_IC, BMS_IC);
 
   for (uint8_t current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
     LTC6811_set_cfgr(current_ic, BMS_IC, REFON, ADCOPT, GPIOBITS_A, DCCBITS_A,
                      DCTOBITS, 24000, 37300);  //!< Under voltage Over voltage
     LTC6811_set_cfgrb(current_ic, BMS_IC, FDRF, DTMEN, PSBITS, GPIOBITS_B,
-                      DCCBITS_B);
+                      DCCBITS_B); // source tracing is not done yet !!!
   }
   shutdown_status = true;
   LTC6811_reset_crc_count(TOTAL_IC, BMS_IC);
   LTC6811_init_reg_limits(TOTAL_IC, BMS_IC);
-  print_menu();
+  // ****************** up to here is within the stock one ********************
 
   for (int i = 0; i < 18; i++)  // Initialize the variable array
   {
     vmin[i] = 5;
-    // consvmax[i] = 5;
   }
   starttowork();
-  delay(100);
-  Serial.println("1st starttowork completed");
-  // temp_detect();
-  voltage_print();
   Serial.println("1st voltage_print completed");
   stat_print.every(
       1500, starttowork1);  // Starttowork (loop routine/2s) : 1.calculate min
@@ -89,11 +85,9 @@ void setup() {
   
   pinMode(BMS_FAULT_PIN, OUTPUT);
   randomSeed(analogRead(A5));  // Random SOC
-  SD.begin(4);
-  // SD.remove("BMS_1.txt");
+
   Can0.begin(CAN_BPS_500K);
   Can0.watchFor();
-
 }
 
 void loop() {
@@ -134,7 +128,6 @@ void discharge() {
         LTC6811_set_custom_discharge(i + 1, TOTAL_IC - (current_ic + 1),
                                      TOTAL_IC, BMS_IC);
         LTC6811_wrcfg(TOTAL_IC, BMS_IC);
-        LTC6811_wrcfgb(TOTAL_IC, BMS_IC);
         discharge_stat[current_ic][i] = true;
       }
     }
@@ -145,7 +138,7 @@ void discharge() {
 }
 
 void stop_discharge() {
-  Serial.println(F("Run 88, Stop all discharge !!"));
+  Serial.println(F("Stop all discharge !!"));
   wakeup_sleep(TOTAL_IC);
   RDS = 0;
   LTC6811_adcv(ADC_CONVERSION_MODE, ADC_DCP, CELL_CH_TO_CONVERT);
@@ -162,7 +155,6 @@ void stop_discharge() {
       wakeup_sleep(TOTAL_IC);
       LTC6811_clear_custom2_discharge(i + 1, current_ic, TOTAL_IC, BMS_IC);
       LTC6811_wrcfg(TOTAL_IC, BMS_IC);
-      LTC6811_wrcfgb(TOTAL_IC, BMS_IC);
     }
   }
   return;
