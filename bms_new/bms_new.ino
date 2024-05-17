@@ -5,22 +5,29 @@
 
 #include "LTC6811.h"
 #include "LTC681x.h"
-#include "LT_I2C.h"
+// #include "LT_I2C.h"
 #include "LT_SPI.h"
 #include "Linduino.h"
-#include "QuikEval_EEPROM.h"
+// #include "QuikEval_EEPROM.h"
 #include "UserInterface.h"
+
+/************************* Defines *****************************/
+#define ENABLED 1
+#define DISABLED 0
+#define DATALOG_ENABLED 1
+#define DATALOG_DISABLED 0
 
 /**************** Local Function Declaration *******************/
 /****** Stock ******/
 void check_error(int error);
 void print_cells(uint8_t datalog_en);
+void print_conv_time(uint32_t conv_time);
 /****** Custom ******/
 void read_voltage();
 void discharge();
 void stop_discharge();
 void calculate();
-// ************ belows are waited to be eliminated **************
+// &&&&&& belows are waited to be eliminated &&&&&&&&
 void starttowork();
 void moniV();                   // called by starttowork
 void battery_charge_balance();  // called by starttowork
@@ -33,12 +40,50 @@ void temp_detect();             // called by calculate
 /****** Stock ******/
 const uint8_t TOTAL_IC = 10;  //!< Number of ICs in the daisy chain
 
+//ADC Command Configurations. See LTC681x.h for options.
+const uint8_t ADC_OPT = ADC_OPT_DISABLED; //!< ADC Mode option bit
+const uint8_t ADC_CONVERSION_MODE = MD_7KHZ_3KHZ; //!< ADC Mode
+const uint8_t ADC_DCP = DCP_ENABLED; //!< Discharge Permitted 
+const uint8_t CELL_CH_TO_CONVERT = CELL_CH_ALL; //!< Channel Selection for ADC conversion
+const uint8_t AUX_CH_TO_CONVERT = AUX_CH_ALL; //!< Channel Selection for ADC conversion
+const uint8_t STAT_CH_TO_CONVERT = STAT_CH_ALL; //!< Channel Selection for ADC conversion
+const uint8_t SEL_ALL_REG = REG_ALL; //!< Register Selection 
+const uint8_t SEL_REG_A = REG_1; //!< Register Selection 
+const uint8_t SEL_REG_B = REG_2; //!< Register Selection 
+
+const uint16_t MEASUREMENT_LOOP_TIME = 500; //!< Loop Time in milliseconds(ms)
+
+//Under Voltage and Over Voltage Thresholds
+const uint16_t OV_THRESHOLD = 41000; //!< Over voltage threshold ADC Code. LSB = 0.0001 ---(4.1V)
+const uint16_t UV_THRESHOLD = 30000; //!< Under voltage threshold ADC Code. LSB = 0.0001 ---(3V)
+
+//Loop Measurement Setup. These Variables are ENABLED or DISABLED. Remember ALL CAPS
+const uint8_t WRITE_CONFIG = DISABLED;  //!< This is to ENABLED or DISABLED writing into to configuration registers in a continuous loop
+const uint8_t READ_CONFIG = DISABLED; //!< This is to ENABLED or DISABLED reading the configuration registers in a continuous loop
+const uint8_t MEASURE_CELL = ENABLED; //!< This is to ENABLED or DISABLED measuring the cell voltages in a continuous loop
+const uint8_t MEASURE_AUX = DISABLED; //!< This is to ENABLED or DISABLED reading the auxiliary registers in a continuous loop
+const uint8_t MEASURE_STAT = DISABLED; //!< This is to ENABLED or DISABLED reading the status registers in a continuous loop
+const uint8_t PRINT_PEC = DISABLED; //!< This is to ENABLED or DISABLED printing the PEC Error Count in a continuous loop
+
 cell_asic BMS_IC[TOTAL_IC];  //!< Global Battery Variable
 
 /****** Custom *****/
 double vmin[TOTAL_IC];
 double vmax[TOTAL_IC];
 double consvmin[TOTAL_IC];
+
+/*********************************************************
+ Set the configuration bits. 
+ Refer to the Configuration Register Group from data sheet. 
+**********************************************************/
+bool REFON = true; //!< Reference Powered Up Bit
+bool ADCOPT = false; //!< ADC Mode option bit
+bool GPIOBITS_A[5] = {false,false,true,true,true}; //!< GPIO Pin Control // Gpio 1,2,3,4,5
+uint16_t UV=UV_THRESHOLD; //!< Under-voltage Comparison Voltage
+uint16_t OV=OV_THRESHOLD; //!< Over-voltage Comparison Voltage
+bool DCCBITS_A[12] = {false,false,false,false,false,false,false,false,false,false,false,false}; //!< Discharge cell switch //Dcc 1,2,3,4,5,6,7,8,9,10,11,12
+bool DCTOBITS[4] = {true, false, true, false}; //!< Discharge time value // Dcto 0,1,2,3 // Programed for 4 min 
+/*Ensure that Dcto bits are set according to the required discharge time. Refer to the data sheet */
 
 void setup() {
   Serial.begin(115200);
@@ -55,11 +100,6 @@ void setup() {
 }
 
 void loop() {
-  if (shutdown_status) {
-    digitalWrite(BMS_FAULT_PIN, HIGH);
-  } else {
-    digitalWrite(BMS_FAULT_PIN, LOW);
-  }
   SPI.begin();
   quikeval_SPI_connect();
   spi_enable(
@@ -98,8 +138,19 @@ void print_cells(uint8_t datalog_en) {
   }
   Serial.println("\n");
 }
+
+void print_conv_time(uint32_t conv_time) {
+  uint16_t m_factor=1000;  // to print in ms
+
+  Serial.print(F("Conversion completed in:"));
+  Serial.print(((float)conv_time/m_factor), 1);
+  Serial.println(F("ms \n"));
+}
 /****** Custom ******/
 void read_voltage() {
+  int8_t error = 0;
+  uint32_t conv_time = 0;
+
   wakeup_sleep(TOTAL_IC);
   LTC6811_adcv(ADC_CONVERSION_MODE, ADC_DCP, CELL_CH_TO_CONVERT);
   conv_time = LTC6811_pollAdc();
@@ -127,11 +178,9 @@ void discharge() {
   }
 
   for (int i = 0; i < BMS_IC[0].ic_reg.cell_channels; i++) {
-    if (BMS_IC[current_ic].cells.c_codes[i] * 0.0001 > consvmin[current_ic]) {
-      wakeup_sleep(TOTAL_IC);
-      LTC6811_set_discharge(i + 1, TOTAL_IC, BMS_IC);
-      LTC6811_wrcfg(TOTAL_IC, BMS_IC);
-    }
+    wakeup_sleep(TOTAL_IC);
+    LTC6811_set_discharge(i + 1, TOTAL_IC, BMS_IC);
+    LTC6811_wrcfg(TOTAL_IC, BMS_IC);
   }
 
   Serial.println(F("start discharge"));
@@ -151,11 +200,11 @@ void stop_discharge() {
   Serial.println(F("Stop balance !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"));
 
   // ******** make the set_discharge function back to stock one *********
-  for (int i = 0; i < BMS_IC[0].ic_reg.cell_channels; i++) {
-    wakeup_sleep(TOTAL_IC);
-    LTC6811_clear_discharge(i + 1, TOTAL_IC, BMS_IC);
-    LTC6811_wrcfg(TOTAL_IC, BMS_IC);
-  }
+  
+  wakeup_sleep(TOTAL_IC);
+  LTC6811_clear_discharge(TOTAL_IC, BMS_IC);
+  LTC6811_wrcfg(TOTAL_IC, BMS_IC);
+  
 }
 
 void calculate() {  // calculate minimal and maxium (cmd 92)
@@ -183,7 +232,7 @@ void calculate() {  // calculate minimal and maxium (cmd 92)
 }
 
 // ************ belows are waited to be eliminated **************
-
+/*
 void starttowork() {
   Serial.println("StartToWork");
   calculate();
@@ -346,3 +395,5 @@ void temp_detect() {
     }
   }
 }
+
+*/
