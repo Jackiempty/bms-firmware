@@ -131,6 +131,7 @@ void loop() {
       SPI_CLOCK_DIV16);  // This will set the Linduino to have a 1MHz Clock
 
   read_voltage();
+  delay(500);
 }
 
 /**************** Local Function Implementation ****************/
