@@ -5,11 +5,11 @@
 
 #include "LTC6811.h"
 #include "LTC681x.h"
-// #include "LT_I2C.h"
 #include "LT_SPI.h"
 #include "Linduino.h"
-// #include "QuikEval_EEPROM.h"
 #include "UserInterface.h"
+// #include "LT_I2C.h"
+// #include "QuikEval_EEPROM.h"
 
 /************************* Defines *****************************/
 #define ENABLED 1
@@ -27,6 +27,7 @@ void read_voltage();
 void discharge();
 void stop_discharge();
 void calculate();
+void check_stat();
 // &&&&&& belows are waited to be eliminated &&&&&&&&
 void starttowork();
 void moniV();                   // called by starttowork
@@ -89,6 +90,14 @@ cell_asic BMS_IC[TOTAL_IC];  //!< Global Battery Variable
 double vmin[TOTAL_IC];
 double vmax[TOTAL_IC];
 double consvmin[TOTAL_IC];
+enum stats {
+  fault,
+  work,
+  charge,
+  balance,
+};
+
+stats status;
 
 /*********************************************************
  Set the configuration bits.
@@ -122,6 +131,8 @@ void setup() {
   }
   LTC6811_reset_crc_count(TOTAL_IC, BMS_IC);
   LTC6811_init_reg_limits(TOTAL_IC, BMS_IC);
+
+  status = fault;
 }
 
 void loop() {
@@ -142,7 +153,7 @@ void check_error(int error) {
   }
 }
 
-void print_cells(uint8_t datalog_en) {
+void print_cells(uint8_t datalog_en) {  // modified
   for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
     if (datalog_en == 0) {
       Serial.print(" IC ");
@@ -152,14 +163,26 @@ void print_cells(uint8_t datalog_en) {
         Serial.print(" C");
         Serial.print(i + 1, DEC);
         Serial.print(":");
-        Serial.print(BMS_IC[current_ic].cells.c_codes[i] * 0.0001, 4);
+        // Set non-read cells to 0 rather than 6.5535 for the sake of
+        // readability
+        if (BMS_IC[current_ic].cells.c_codes[i] == 65535) {
+          Serial.print(0, 4);
+        } else {
+          Serial.print(BMS_IC[current_ic].cells.c_codes[i] * 0.0001, 4);
+        }
         Serial.print(",");
       }
       Serial.println();
     } else {
       Serial.print(" Cells :");
       for (int i = 0; i < BMS_IC[0].ic_reg.cell_channels; i++) {
-        Serial.print(BMS_IC[current_ic].cells.c_codes[i] * 0.0001, 4);
+        // Set non-read cells to 0 rather than 6.5535 for the sake of
+        // readability
+        if (BMS_IC[current_ic].cells.c_codes[i] == 65535) {
+          Serial.print(0, 4);
+        } else {
+          Serial.print(BMS_IC[current_ic].cells.c_codes[i] * 0.0001, 4);
+        }
         Serial.print(",");
       }
     }
@@ -187,7 +210,12 @@ void read_voltage() {
   error = LTC6811_rdcv(SEL_ALL_REG, TOTAL_IC,
                        BMS_IC);  // Set to read back all cell voltage registers
   check_error(error);
-  print_cells(DATALOG_DISABLED);
+
+  // eliminate failed observation
+  if (conv_time != 0) {
+    print_cells(DATALOG_DISABLED);
+    check_stat();
+  }
 }
 
 void discharge() {
@@ -243,21 +271,62 @@ void calculate() {  // calculate minimal and maxium (cmd 92)
   error = LTC6811_rdcv(SEL_ALL_REG, TOTAL_IC,
                        BMS_IC);  // Set to read back all cell voltage registers
   check_error(error);
-  for (int j = 0; j < TOTAL_IC; j++) {
-    vmin[j] = 5;
-    vmax[j] = 0;
+  for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
+    vmin[current_ic] = 5;
+    vmax[current_ic] = 0;
     for (int i = 0; i < BMS_IC[0].ic_reg.cell_channels; i++) {
-      vmin[j] > BMS_IC[j].cells.c_codes[i] * 0.0001
-          ? vmin[j] = BMS_IC[j].cells.c_codes[i] * 0.0001
+      vmin[current_ic] > BMS_IC[current_ic].cells.c_codes[i] * 0.0001
+          ? vmin[current_ic] = BMS_IC[current_ic].cells.c_codes[i] * 0.0001
           : 1;
-      vmax[j] < BMS_IC[j].cells.c_codes[i] * 0.0001
-          ? vmax[j] = BMS_IC[j].cells.c_codes[i] * 0.0001
+      vmax[current_ic] < BMS_IC[current_ic].cells.c_codes[i] * 0.0001
+          ? vmax[current_ic] = BMS_IC[current_ic].cells.c_codes[i] * 0.0001
           : 1;
     }
   }
   temp_detect();
 }
 
+void check_stat() {
+  calculate();
+  switch (status) {
+    case fault:
+      for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
+        if (vmax[current_ic] <= 4.25 && vmin[current_ic] >= 2.8) {
+          status = work;
+        }
+      }
+      break;
+    case work:
+      for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
+        if (vmax[current_ic] >= 4.25 || vmin[current_ic] <= 2.8) {
+          status = fault;
+        } else if (vmax[current_ic] >= 4.2) {
+          status = balance;
+        }
+      }
+      break;
+    case charge:
+      for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
+        if (vmax[current_ic] >= 4.25 || vmin[current_ic] <= 2.8) {
+          status = fault;
+        } else if (vmax[current_ic] >= 4.12) {
+          status = balance;
+        }
+      }
+      break;
+    case balance:
+      for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
+        if (vmax[current_ic] >= 4.25 || vmin[current_ic] <= 2.8) {
+          status = fault;
+        } else if (vmin[current_ic] <= consvmin[current_ic]) {
+          status = charge;
+        }
+      }
+      break;
+    default:
+      status = fault;
+  }
+}
 // ************ belows are waited to be eliminated **************
 /*
 void starttowork() {
@@ -360,6 +429,7 @@ void battery_charge_balance() {
 
   return;
 }  // called by starttowork
+*/
 
 void temp_detect() {
   uint32_t conv_time = 0;
@@ -422,5 +492,3 @@ void temp_detect() {
     }
   }
 }
-
-*/
