@@ -12,10 +12,13 @@
 // #include "QuikEval_EEPROM.h"
 
 /************************* Defines *****************************/
+/****** Stock ******/
 #define ENABLED 1
 #define DISABLED 0
 #define DATALOG_ENABLED 1
 #define DATALOG_DISABLED 0
+/****** Custom ******/
+#define stat_pin 10  // In response to the PCB design pinout
 
 /**************** Local Function Declaration *******************/
 /****** Stock ******/
@@ -24,15 +27,15 @@ void print_cells(uint8_t datalog_en);
 void print_conv_time(uint32_t conv_time);
 /****** Custom ******/
 void read_voltage();
-void discharge();
+void balance();
 void stop_discharge();
 void calculate();
 void check_stat();
+void temp_detect();  // called by calculate
 // &&&&&& belows are waited to be eliminated &&&&&&&&
-void starttowork();
+// void starttowork();
 void moniV();                   // called by starttowork
 void battery_charge_balance();  // called by starttowork
-void temp_detect();             // called by calculate
 
 /*******************************************************************
   Setup Variables
@@ -94,7 +97,6 @@ enum stats {
   fault,
   work,
   charge,
-  balance,
 };
 
 stats status;
@@ -132,7 +134,12 @@ void setup() {
   LTC6811_reset_crc_count(TOTAL_IC, BMS_IC);
   LTC6811_init_reg_limits(TOTAL_IC, BMS_IC);
 
-  status = fault;
+  pinMode(stat_pin, INPUT);
+  if (digitalRead(stat_pin) == HIGH) {
+    status = charge;
+  } else if (digitalRead(stat_pin) == LOW) {
+    status = work;
+  }
 }
 
 void loop() {
@@ -141,8 +148,9 @@ void loop() {
   spi_enable(
       SPI_CLOCK_DIV16);  // This will set the Linduino to have a 1MHz Clock
 
+  check_stat();
   read_voltage();
-  delay(500);
+  delay(100);
 }
 
 /**************** Local Function Implementation ****************/
@@ -218,7 +226,7 @@ void read_voltage() {
   }
 }
 
-void discharge() {
+void balance() {
   int8_t error = 0;
   uint32_t conv_time = 0;
 
@@ -239,7 +247,7 @@ void discharge() {
     LTC6811_wrcfg(TOTAL_IC, BMS_IC);
   }
 
-  Serial.println(F("start discharge"));
+  Serial.println(F("----------start discharge----------"));
 }
 
 void stop_discharge() {
@@ -253,9 +261,7 @@ void stop_discharge() {
   error = LTC6811_rdcv(SEL_ALL_REG, TOTAL_IC, BMS_IC);
   check_error(error);
 
-  Serial.println(F("Stop balance !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"));
-
-  // ******** make the set_discharge function back to stock one *********
+  Serial.println(F("----------Stop balance----------"));
 
   wakeup_sleep(TOTAL_IC);
   LTC6811_clear_discharge(TOTAL_IC, BMS_IC);
@@ -301,7 +307,7 @@ void check_stat() {
         if (vmax[current_ic] >= 4.25 || vmin[current_ic] <= 2.8) {
           status = fault;
         } else if (vmax[current_ic] >= 4.2) {
-          status = balance;
+          balance();
         }
       }
       break;
@@ -310,16 +316,7 @@ void check_stat() {
         if (vmax[current_ic] >= 4.25 || vmin[current_ic] <= 2.8) {
           status = fault;
         } else if (vmax[current_ic] >= 4.12) {
-          status = balance;
-        }
-      }
-      break;
-    case balance:
-      for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-        if (vmax[current_ic] >= 4.25 || vmin[current_ic] <= 2.8) {
-          status = fault;
-        } else if (vmin[current_ic] <= consvmin[current_ic]) {
-          status = charge;
+          balance();
         }
       }
       break;
