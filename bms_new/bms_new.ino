@@ -42,7 +42,7 @@ void battery_charge_balance();  // called by starttowork
   The following variables can be modified to configure the software.
 ********************************************************************/
 /****************** Stock *******************/
-const uint8_t TOTAL_IC = 10;  //!< Number of ICs in the daisy chain
+const uint8_t TOTAL_IC = 2;  //!< Number of ICs in the daisy chain
 
 // ADC Command Configurations. See LTC681x.h for options.
 const uint8_t ADC_OPT = ADC_OPT_DISABLED;          //!< ADC Mode option bit
@@ -157,20 +157,20 @@ void loop() {
 /****** Stock ******/
 void check_error(int error) {
   if (error == -1) {
-    Serial.println(F("A PEC error was detected in the received data"));
+    // Serial.println(F("A PEC error was detected in the received data"));
   }
 }
 
 void print_cells(uint8_t datalog_en) {  // modified
   for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
     if (datalog_en == 0) {
-      Serial.print(" IC ");
-      Serial.print(current_ic + 1, DEC);
-      Serial.print(": ");
+      // Serial.print(" IC ");
+      // Serial.print(current_ic + 1, DEC);
+      // Serial.print(": ");
       for (int i = 0; i < BMS_IC[0].ic_reg.cell_channels; i++) {
-        Serial.print(" C");
-        Serial.print(i + 1, DEC);
-        Serial.print(":");
+        // Serial.print(" C");
+        // Serial.print(i + 1, DEC);
+        // Serial.print(":");
         // Set non-read cells to 0 rather than 6.5535 for the sake of
         // readability
         if (BMS_IC[current_ic].cells.c_codes[i] == 65535) {
@@ -178,11 +178,11 @@ void print_cells(uint8_t datalog_en) {  // modified
         } else {
           Serial.print(BMS_IC[current_ic].cells.c_codes[i] * 0.0001, 4);
         }
-        Serial.print(",");
+       Serial.print(",");
       }
-      Serial.println();
+      // Serial.println();
     } else {
-      Serial.print(" Cells :");
+      // Serial.print(" Cells :");
       for (int i = 0; i < BMS_IC[0].ic_reg.cell_channels; i++) {
         // Set non-read cells to 0 rather than 6.5535 for the sake of
         // readability
@@ -195,15 +195,15 @@ void print_cells(uint8_t datalog_en) {  // modified
       }
     }
   }
-  Serial.println("\n");
+  // Serial.println("\n");
 }
 
 void print_conv_time(uint32_t conv_time) {
   uint16_t m_factor = 1000;  // to print in ms
 
-  Serial.print(F("Conversion completed in:"));
-  Serial.print(((float)conv_time / m_factor), 1);
-  Serial.println(F("ms \n"));
+  // Serial.print(F("Conversion completed in:"));
+  // Serial.print(((float)conv_time / m_factor), 1);
+  // Serial.println(F("ms \n"));
 }
 /****** Custom ******/
 void read_voltage() {
@@ -247,21 +247,21 @@ void balance() {
     LTC6811_wrcfg(TOTAL_IC, BMS_IC);
   }
 
-  Serial.println(F("----------start discharge----------"));
+  // Serial.println(F("----------start discharge----------"));
 }
 
 void stop_discharge() {
   int8_t error = 0;
   uint32_t conv_time = 0;
 
-  Serial.println(F("Stop all discharge !!"));
+  // Serial.println(F("Stop all discharge !!"));
   wakeup_sleep(TOTAL_IC);
   LTC6811_adcv(ADC_CONVERSION_MODE, ADC_DCP, CELL_CH_TO_CONVERT);
   conv_time = LTC6811_pollAdc();
   error = LTC6811_rdcv(SEL_ALL_REG, TOTAL_IC, BMS_IC);
   check_error(error);
 
-  Serial.println(F("----------Stop balance----------"));
+  // Serial.println(F("----------Stop balance----------"));
 
   wakeup_sleep(TOTAL_IC);
   LTC6811_clear_discharge(TOTAL_IC, BMS_IC);
@@ -312,6 +312,8 @@ void check_stat() {
           status = fault;
         } else if (vmax[current_ic] >= 4.2) {
           balance();
+        } else {
+          stop_discharge();
         }
       }
       break;
@@ -321,6 +323,8 @@ void check_stat() {
           status = fault;
         } else if (vmax[current_ic] >= 4.12) {
           balance();
+        } else {
+          stop_discharge();
         }
       }
       break;
