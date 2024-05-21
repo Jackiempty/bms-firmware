@@ -18,7 +18,7 @@
 #define DATALOG_ENABLED 1
 #define DATALOG_DISABLED 0
 /****** Custom ******/
-#define stat_pin 10  // In response to the PCB design pinout
+#define stat_pin 2  // In response to the PCB design pinout
 
 /**************** Local Function Declaration *******************/
 /****** Stock ******/
@@ -289,7 +289,7 @@ void calculate() {  // calculate minimal and maxium (cmd 92)
           : 1;
     }
   }
-  temp_detect();
+  // temp_detect();
 }
 
 void check_stat() {
@@ -300,6 +300,10 @@ void check_stat() {
         if (vmax[current_ic] <= 4.25 && vmin[current_ic] >= 2.8) {
           status = work;
         }
+      }
+      if (status == fault) {
+        stop_discharge();
+        // exit(1);
       }
       break;
     case work:
