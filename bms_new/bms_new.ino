@@ -27,10 +27,17 @@ void print_cells(uint8_t datalog_en);
 void print_conv_time(uint32_t conv_time);
 /****** Custom ******/
 void read_voltage();
+void discharge();
 void balance();
 void stop_discharge();
 void calculate();
 void check_stat();
+void set_discharge(      // Add to balance function formally when compeleted
+    int Cell,            // The cell to be discharged
+    uint8_t current_ic,  // The subsystem of the selected IC to be discharge
+    uint8_t total_ic,    // Number of ICs in the system
+    cell_asic *ic        // A two dimensional array that will store the data
+);
 void temp_detect();  // called by calculate
 // &&&&&& belows are waited to be eliminated &&&&&&&&
 // void starttowork();
@@ -150,6 +157,8 @@ void loop() {
 
   check_stat();
   read_voltage();
+  Serial.print(status);
+  Serial.print(", ");
   delay(100);
 }
 
@@ -178,7 +187,7 @@ void print_cells(uint8_t datalog_en) {  // modified
         } else {
           Serial.print(BMS_IC[current_ic].cells.c_codes[i] * 0.0001, 4);
         }
-       Serial.print(",");
+        Serial.print(",");
       }
       // Serial.println();
     } else {
@@ -195,7 +204,7 @@ void print_cells(uint8_t datalog_en) {  // modified
       }
     }
   }
-  // Serial.println("\n");
+  Serial.println("\n");
 }
 
 void print_conv_time(uint32_t conv_time) {
@@ -226,7 +235,7 @@ void read_voltage() {
   }
 }
 
-void balance() {
+void discharge() {
   int8_t error = 0;
   uint32_t conv_time = 0;
 
@@ -235,11 +244,6 @@ void balance() {
   conv_time = LTC6811_pollAdc();
   error = LTC6811_rdcfg(TOTAL_IC, BMS_IC);
   check_error(error);  // Check error to enable the function
-  for (int i = 0; i < TOTAL_IC; i++) {
-    // ******** need to change the usage of consvmin and vmin ********
-    consvmin[i] = vmin[i];  // Set up a costant Vminimum in case of the
-                            // minumum become lower and lower
-  }
 
   for (int i = 0; i < BMS_IC[0].ic_reg.cell_channels; i++) {
     wakeup_sleep(TOTAL_IC);
@@ -248,6 +252,26 @@ void balance() {
   }
 
   // Serial.println(F("----------start discharge----------"));
+}
+
+void balance() {
+  wakeup_sleep(TOTAL_IC);
+  LTC6811_adcv(ADC_CONVERSION_MODE, ADC_DCP, CELL_CH_TO_CONVERT);
+  conv_time = LTC6811_pollAdc();
+  error = LTC6811_rdcfg(TOTAL_IC, BMS_IC);
+  check_error(error);  // Check error to enable the function
+  for (int i = 0; i < TOTAL_IC; i++) {
+    consvmin[i] = vmin[i];  // Set up a costant Vminimum in case of the
+                            // minumum become lower and lower
+  }
+  for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
+    for (int i = 0; i < BMS_IC[0].ic_reg.cell_channels; i++) {
+      if (BMS_IC[current_ic].cells.c_codes[i] * 0.0001 > consvmin[current_ic]) {
+        balance(i + 1, current_ic, TOTAL_IC, BMS_IC);
+        LTC6811_wrcfg(TOTAL_IC, BMS_IC);
+      }
+    }
+  }
 }
 
 void stop_discharge() {
@@ -311,7 +335,7 @@ void check_stat() {
         if (vmax[current_ic] >= 4.25 || vmin[current_ic] <= 2.8) {
           status = fault;
         } else if (vmax[current_ic] >= 4.2) {
-          balance();
+          discharge();
         } else {
           stop_discharge();
         }
@@ -322,7 +346,7 @@ void check_stat() {
         if (vmax[current_ic] >= 4.25 || vmin[current_ic] <= 2.8) {
           status = fault;
         } else if (vmax[current_ic] >= 4.12) {
-          balance();
+          discharge();
         } else {
           stop_discharge();
         }
@@ -332,6 +356,24 @@ void check_stat() {
       status = fault;
   }
 }
+
+void set_discharge(
+    int Cell,            // The cell to be discharged
+    uint8_t current_ic,  // The subsystem of the selected IC to be discharge
+    uint8_t total_ic,    // Number of ICs in the system
+    cell_asic *ic        // A two dimensional array that will store the data
+) {
+  if ((Cell < 9) && (Cell != 0)) {
+    ic[current_ic].config.tx_data[4] =
+        ic[i].config.tx_data[4] | (1 << (Cell - 1));
+  } else if (Cell < 13) {
+    ic[current_ic].config.tx_data[5] =
+        ic[i].config.tx_data[5] | (1 << (Cell - 9));
+  } else {
+    break;
+  }
+}
+
 // ************ belows are waited to be eliminated **************
 /*
 void starttowork() {
