@@ -325,16 +325,22 @@ void balance() {
               consvmin[current_ic]) <= 0.1) {
         // build a customized one to determine the certain ic/cell to stop
         // discharge
+        Serial.print(abs(BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
+                         consvmin[current_ic]));
         Serial.println("stop balance");
         LTC6811_clear_discharge(TOTAL_IC, BMS_IC);
         LTC6811_wrcfg(TOTAL_IC, BMS_IC);
       } else if ((BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
                   consvmin[current_ic]) > 0.1) {
+        Serial.print(BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
+                     consvmin[current_ic]);
         Serial.println("start balance");
         set_ic_discharge(i + 1, current_ic, TOTAL_IC, BMS_IC);
         LTC6811_wrcfg(TOTAL_IC, BMS_IC);
       } else if ((BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
                   consvmin[current_ic]) < -0.1) {
+        Serial.print(BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
+                     consvmin[current_ic]);
         Serial.println("do nothing");
         // reset_vmin();
       }
