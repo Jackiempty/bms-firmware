@@ -29,11 +29,12 @@ void print_cells(uint8_t datalog_en);
 void print_conv_time(uint32_t conv_time);
 /****** Custom ******/
 void read_voltage();
-void discharge();
+void set_all_discharge();
+void stop_all_discharge();
 void balance();
-void stop_discharge();
 void calculate();
 void check_stat();
+void reset_vmin();
 void set_ic_discharge(   // Add to balance function formally when compeleted
     int Cell,            // The cell to be discharged
     uint8_t current_ic,  // The subsystem of the selected IC to be discharge
@@ -98,6 +99,7 @@ cell_asic BMS_IC[TOTAL_IC];  //!< Global Battery Variable
 double vmin[TOTAL_IC];
 double vmax[TOTAL_IC];
 double consvmin[TOTAL_IC];
+unsigned long timer;
 enum stats {
   fault,
   work,
@@ -139,6 +141,9 @@ void setup() {
   LTC6811_reset_crc_count(TOTAL_IC, BMS_IC);
   LTC6811_init_reg_limits(TOTAL_IC, BMS_IC);
 
+  timer = 0;
+  calculate();
+  reset_vmin();
   pinMode(BMS_FAULT_PIN, OUTPUT);
 
   pinMode(stat_pin, INPUT);
@@ -156,9 +161,16 @@ void loop() {
       SPI_CLOCK_DIV16);  // This will set the Linduino to have a 1MHz Clock
 
   check_stat();
-  read_voltage();
-  Serial.print(status);
-  Serial.print(", ");
+  read_voltage();  // read and print the current voltage
+  calculate();     // calculate minimal and maxium
+
+  // Serial.print(status);
+  // Serial.print(", ");
+
+  if (millis() - timer >= 30000) {
+    balance();
+    timer = millis();
+  }
 
   if (status == fault) {
     digitalWrite(BMS_FAULT_PIN, HIGH);
@@ -166,6 +178,16 @@ void loop() {
     digitalWrite(BMS_FAULT_PIN, LOW);
   }
   delay(100);
+
+  // testing area **************************
+  if (Serial.read() == '5') {
+    balance();
+    Serial.print(
+        "***********************************balance****************************"
+        "****\n");
+  } else if (Serial.read() == '6') {
+    stop_all_discharge();
+  }
 }
 
 /**************** Local Function Implementation ****************/
@@ -237,11 +259,10 @@ void read_voltage() {
   // eliminate failed observation
   if (conv_time != 0) {
     print_cells(DATALOG_DISABLED);
-    check_stat();
   }
 }
 
-void discharge() {
+void set_all_discharge() {
   int8_t error = 0;
   uint32_t conv_time = 0;
 
@@ -260,30 +281,7 @@ void discharge() {
   // Serial.println(F("----------start discharge----------"));
 }
 
-void balance() {
-  int8_t error = 0;
-  uint32_t conv_time = 0;
-
-  wakeup_sleep(TOTAL_IC);
-  LTC6811_adcv(ADC_CONVERSION_MODE, ADC_DCP, CELL_CH_TO_CONVERT);
-  conv_time = LTC6811_pollAdc();
-  error = LTC6811_rdcfg(TOTAL_IC, BMS_IC);
-  check_error(error);  // Check error to enable the function
-  for (int i = 0; i < TOTAL_IC; i++) {
-    consvmin[i] = vmin[i];  // Set up a costant Vminimum in case of the
-                            // minumum become lower and lower
-  }
-  for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-    for (int i = 0; i < BMS_IC[0].ic_reg.cell_channels; i++) {
-      if (BMS_IC[current_ic].cells.c_codes[i] * 0.0001 > consvmin[current_ic]) {
-        set_ic_discharge(i + 1, current_ic, TOTAL_IC, BMS_IC);
-        LTC6811_wrcfg(TOTAL_IC, BMS_IC);
-      }
-    }
-  }
-}
-
-void stop_discharge() {
+void stop_all_discharge() {
   int8_t error = 0;
   uint32_t conv_time = 0;
 
@@ -301,7 +299,55 @@ void stop_discharge() {
   LTC6811_wrcfg(TOTAL_IC, BMS_IC);
 }
 
-void calculate() {  // calculate minimal and maxium (cmd 92)
+void balance() {
+  int8_t error = 0;
+  uint32_t conv_time = 0;
+
+  wakeup_sleep(TOTAL_IC);
+  LTC6811_adcv(ADC_CONVERSION_MODE, ADC_DCP, CELL_CH_TO_CONVERT);
+  conv_time = LTC6811_pollAdc();
+  error = LTC6811_rdcfg(TOTAL_IC, BMS_IC);
+  check_error(error);  // Check error to enable the function
+
+  for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
+    for (int i = 0; i < BMS_IC[0].ic_reg.cell_channels; i++) {
+      if (abs(BMS_IC[current_ic].cells.c_codes[i] * 0.0001) -
+              consvmin[current_ic] <=
+          0.1) {
+        // build a customized one to determine the certain ic/cell to stop
+        // discharge
+        LTC6811_clear_discharge(TOTAL_IC, BMS_IC);
+        LTC6811_wrcfg(TOTAL_IC, BMS_IC);
+      } else if ((BMS_IC[current_ic].cells.c_codes[i] * 0.0001) -
+                     consvmin[current_ic] >
+                 0.1) {
+        set_ic_discharge(i + 1, current_ic, TOTAL_IC, BMS_IC);
+        LTC6811_wrcfg(TOTAL_IC, BMS_IC);
+      } else if ((BMS_IC[current_ic].cells.c_codes[i] * 0.0001) -
+                     consvmin[current_ic] <
+                 -0.1) {
+        reset_vmin();
+      }
+    }
+  }
+}
+
+void set_ic_discharge(
+    int Cell,            // The cell to be discharged
+    uint8_t current_ic,  // The subsystem of the selected IC to be discharge
+    uint8_t total_ic,    // Number of ICs in the system
+    cell_asic *ic        // A two dimensional array that will store the data
+) {
+  if ((Cell < 9) && (Cell != 0)) {
+    ic[current_ic].config.tx_data[4] =
+        ic[current_ic].config.tx_data[4] | (1 << (Cell - 1));
+  } else if (Cell < 13) {
+    ic[current_ic].config.tx_data[5] =
+        ic[current_ic].config.tx_data[5] | (1 << (Cell - 9));
+  }
+}
+
+void calculate() {  // calculate minimal and maxium
   int8_t error = 0;
   uint32_t conv_time = 0;
 
@@ -326,7 +372,6 @@ void calculate() {  // calculate minimal and maxium (cmd 92)
 }
 
 void check_stat() {
-  calculate();
   switch (status) {
     case fault:
       for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
@@ -335,7 +380,7 @@ void check_stat() {
         }
       }
       if (status == fault) {
-        stop_discharge();
+        stop_all_discharge();
         // exit(1);
       }
       break;
@@ -344,9 +389,9 @@ void check_stat() {
         if (vmax[current_ic] >= 4.25 || vmin[current_ic] <= 2.8) {
           status = fault;
         } else if (vmax[current_ic] >= 4.2) {
-          discharge();
+          set_all_discharge();
         } else {
-          stop_discharge();
+          stop_all_discharge();
         }
       }
       break;
@@ -355,9 +400,9 @@ void check_stat() {
         if (vmax[current_ic] >= 4.25 || vmin[current_ic] <= 2.8) {
           status = fault;
         } else if (vmax[current_ic] >= 4.12) {
-          discharge();
+          set_all_discharge();
         } else {
-          stop_discharge();
+          stop_all_discharge();
         }
       }
       break;
@@ -366,18 +411,10 @@ void check_stat() {
   }
 }
 
-void set_ic_discharge(
-    int Cell,            // The cell to be discharged
-    uint8_t current_ic,  // The subsystem of the selected IC to be discharge
-    uint8_t total_ic,    // Number of ICs in the system
-    cell_asic *ic        // A two dimensional array that will store the data
-) {
-  if ((Cell < 9) && (Cell != 0)) {
-    ic[current_ic].config.tx_data[4] =
-        ic[current_ic].config.tx_data[4] | (1 << (Cell - 1));
-  } else if (Cell < 13) {
-    ic[current_ic].config.tx_data[5] =
-        ic[current_ic].config.tx_data[5] | (1 << (Cell - 9));
+void reset_vmin() {
+  for (int i = 0; i < TOTAL_IC; i++) {
+    consvmin[i] = vmin[i];  // Set up a costant Vminimum in case of the
+                            // minumum become lower and lower
   }
 }
 
