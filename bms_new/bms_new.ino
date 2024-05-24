@@ -18,7 +18,9 @@
 #define DATALOG_ENABLED 1
 #define DATALOG_DISABLED 0
 /****** Custom ******/
-#define stat_pin 10  // In response to the PCB design pinout
+#define BMS_FAULT_PIN 2
+/****** Custom ******/
+#define stat_pin 2  // In response to the PCB design pinout
 
 /**************** Local Function Declaration *******************/
 /****** Stock ******/
@@ -27,22 +29,26 @@ void print_cells(uint8_t datalog_en);
 void print_conv_time(uint32_t conv_time);
 /****** Custom ******/
 void read_voltage();
+void set_all_discharge();
+void stop_all_discharge();
 void balance();
-void stop_discharge();
 void calculate();
 void check_stat();
+void reset_vmin();
+void set_ic_discharge(   // Add to balance function formally when compeleted
+    int Cell,            // The cell to be discharged
+    uint8_t current_ic,  // The subsystem of the selected IC to be discharge
+    uint8_t total_ic,    // Number of ICs in the system
+    cell_asic *ic        // A two dimensional array that will store the data
+);
 void temp_detect();  // called by calculate
-// &&&&&& belows are waited to be eliminated &&&&&&&&
-// void starttowork();
-void moniV();                   // called by starttowork
-void battery_charge_balance();  // called by starttowork
 
 /*******************************************************************
   Setup Variables
   The following variables can be modified to configure the software.
 ********************************************************************/
 /****************** Stock *******************/
-const uint8_t TOTAL_IC = 10;  //!< Number of ICs in the daisy chain
+const uint8_t TOTAL_IC = 2;  //!< Number of ICs in the daisy chain
 
 // ADC Command Configurations. See LTC681x.h for options.
 const uint8_t ADC_OPT = ADC_OPT_DISABLED;          //!< ADC Mode option bit
@@ -93,6 +99,7 @@ cell_asic BMS_IC[TOTAL_IC];  //!< Global Battery Variable
 double vmin[TOTAL_IC];
 double vmax[TOTAL_IC];
 double consvmin[TOTAL_IC];
+unsigned long timer;
 enum stats {
   fault,
   work,
@@ -134,12 +141,26 @@ void setup() {
   LTC6811_reset_crc_count(TOTAL_IC, BMS_IC);
   LTC6811_init_reg_limits(TOTAL_IC, BMS_IC);
 
+  timer = 0;
+  calculate();
+  reset_vmin();
+
+  Serial.println("Vmin:");
+  for (int i = 0; i < TOTAL_IC; i++) {
+    Serial.print(consvmin[i]);
+    Serial.print(", ");
+  }
+  Serial.print("\n");
+
+  pinMode(BMS_FAULT_PIN, OUTPUT);
+
   pinMode(stat_pin, INPUT);
   if (digitalRead(stat_pin) == HIGH) {
     status = charge;
   } else if (digitalRead(stat_pin) == LOW) {
     status = work;
   }
+  Serial.println("Setup completed");
 }
 
 void loop() {
@@ -148,29 +169,55 @@ void loop() {
   spi_enable(
       SPI_CLOCK_DIV16);  // This will set the Linduino to have a 1MHz Clock
 
-  check_stat();
-  read_voltage();
+  // check_stat();
+  read_voltage();  // read and print the current voltage
+  calculate();     // calculate minimal and maxium
+
+  // Serial.print(status);
+  // Serial.print(", ");
+
+  if (millis() - timer >= 10000) {
+    Serial.print("Balance\n");
+    balance();
+    timer = millis();
+  }
+
+  if (status == fault) {
+    digitalWrite(BMS_FAULT_PIN, HIGH);
+  } else {
+    digitalWrite(BMS_FAULT_PIN, LOW);
+  }
   delay(100);
+
+  // testing area **************************
+  if (Serial.read() == '5') {
+    Serial.print(
+        "***********************************balance****************************"
+        "****\n");
+    balance();
+  } else if (Serial.read() == '6') {
+    stop_all_discharge();
+  }
 }
 
 /**************** Local Function Implementation ****************/
 /****** Stock ******/
 void check_error(int error) {
   if (error == -1) {
-    Serial.println(F("A PEC error was detected in the received data"));
+    // Serial.println(F("A PEC error was detected in the received data"));
   }
 }
 
 void print_cells(uint8_t datalog_en) {  // modified
   for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
     if (datalog_en == 0) {
-      Serial.print(" IC ");
-      Serial.print(current_ic + 1, DEC);
-      Serial.print(": ");
+      // Serial.print(" IC ");
+      // Serial.print(current_ic + 1, DEC);
+      // Serial.print(": ");
       for (int i = 0; i < BMS_IC[0].ic_reg.cell_channels; i++) {
-        Serial.print(" C");
-        Serial.print(i + 1, DEC);
-        Serial.print(":");
+        // Serial.print(" C");
+        // Serial.print(i + 1, DEC);
+        // Serial.print(":");
         // Set non-read cells to 0 rather than 6.5535 for the sake of
         // readability
         if (BMS_IC[current_ic].cells.c_codes[i] == 65535) {
@@ -180,9 +227,9 @@ void print_cells(uint8_t datalog_en) {  // modified
         }
         Serial.print(",");
       }
-      Serial.println();
+      // Serial.println();
     } else {
-      Serial.print(" Cells :");
+      // Serial.print(" Cells :");
       for (int i = 0; i < BMS_IC[0].ic_reg.cell_channels; i++) {
         // Set non-read cells to 0 rather than 6.5535 for the sake of
         // readability
@@ -195,15 +242,15 @@ void print_cells(uint8_t datalog_en) {  // modified
       }
     }
   }
-  Serial.println("\n");
+  Serial.print("\n");
 }
 
 void print_conv_time(uint32_t conv_time) {
   uint16_t m_factor = 1000;  // to print in ms
 
-  Serial.print(F("Conversion completed in:"));
-  Serial.print(((float)conv_time / m_factor), 1);
-  Serial.println(F("ms \n"));
+  // Serial.print(F("Conversion completed in:"));
+  // Serial.print(((float)conv_time / m_factor), 1);
+  // Serial.println(F("ms \n"));
 }
 /****** Custom ******/
 void read_voltage() {
@@ -222,8 +269,44 @@ void read_voltage() {
   // eliminate failed observation
   if (conv_time != 0) {
     print_cells(DATALOG_DISABLED);
-    check_stat();
   }
+}
+
+void set_all_discharge() {
+  int8_t error = 0;
+  uint32_t conv_time = 0;
+
+  wakeup_sleep(TOTAL_IC);
+  LTC6811_adcv(ADC_CONVERSION_MODE, ADC_DCP, CELL_CH_TO_CONVERT);
+  conv_time = LTC6811_pollAdc();
+  error = LTC6811_rdcfg(TOTAL_IC, BMS_IC);
+  check_error(error);  // Check error to enable the function
+
+  for (int i = 0; i < BMS_IC[0].ic_reg.cell_channels; i++) {
+    wakeup_sleep(TOTAL_IC);
+    LTC6811_set_discharge(i + 1, TOTAL_IC, BMS_IC);
+    LTC6811_wrcfg(TOTAL_IC, BMS_IC);
+  }
+
+  // Serial.println(F("----------start discharge----------"));
+}
+
+void stop_all_discharge() {
+  int8_t error = 0;
+  uint32_t conv_time = 0;
+
+  // Serial.println(F("Stop all discharge !!"));
+  wakeup_sleep(TOTAL_IC);
+  LTC6811_adcv(ADC_CONVERSION_MODE, ADC_DCP, CELL_CH_TO_CONVERT);
+  conv_time = LTC6811_pollAdc();
+  error = LTC6811_rdcv(SEL_ALL_REG, TOTAL_IC, BMS_IC);
+  check_error(error);
+
+  // Serial.println(F("----------Stop balance----------"));
+
+  wakeup_sleep(TOTAL_IC);
+  LTC6811_clear_discharge(TOTAL_IC, BMS_IC);
+  LTC6811_wrcfg(TOTAL_IC, BMS_IC);
 }
 
 void balance() {
@@ -235,40 +318,46 @@ void balance() {
   conv_time = LTC6811_pollAdc();
   error = LTC6811_rdcfg(TOTAL_IC, BMS_IC);
   check_error(error);  // Check error to enable the function
-  for (int i = 0; i < TOTAL_IC; i++) {
-    // ******** need to change the usage of consvmin and vmin ********
-    consvmin[i] = vmin[i];  // Set up a costant Vminimum in case of the
-                            // minumum become lower and lower
-  }
 
-  for (int i = 0; i < BMS_IC[0].ic_reg.cell_channels; i++) {
-    wakeup_sleep(TOTAL_IC);
-    LTC6811_set_discharge(i + 1, TOTAL_IC, BMS_IC);
-    LTC6811_wrcfg(TOTAL_IC, BMS_IC);
+  for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
+    for (int i = 0; i < BMS_IC[0].ic_reg.cell_channels; i++) {
+      if (abs(BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
+              consvmin[current_ic]) <= 0.1) {
+        // build a customized one to determine the certain ic/cell to stop
+        // discharge
+        Serial.println("stop balance");
+        LTC6811_clear_discharge(TOTAL_IC, BMS_IC);
+        LTC6811_wrcfg(TOTAL_IC, BMS_IC);
+      } else if ((BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
+                  consvmin[current_ic]) > 0.1) {
+        Serial.println("start balance");
+        set_ic_discharge(i + 1, current_ic, TOTAL_IC, BMS_IC);
+        LTC6811_wrcfg(TOTAL_IC, BMS_IC);
+      } else if ((BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
+                  consvmin[current_ic]) < -0.1) {
+        Serial.println("do nothing");
+        // reset_vmin();
+      }
+    }
   }
-
-  Serial.println(F("----------start discharge----------"));
 }
 
-void stop_discharge() {
-  int8_t error = 0;
-  uint32_t conv_time = 0;
-
-  Serial.println(F("Stop all discharge !!"));
-  wakeup_sleep(TOTAL_IC);
-  LTC6811_adcv(ADC_CONVERSION_MODE, ADC_DCP, CELL_CH_TO_CONVERT);
-  conv_time = LTC6811_pollAdc();
-  error = LTC6811_rdcv(SEL_ALL_REG, TOTAL_IC, BMS_IC);
-  check_error(error);
-
-  Serial.println(F("----------Stop balance----------"));
-
-  wakeup_sleep(TOTAL_IC);
-  LTC6811_clear_discharge(TOTAL_IC, BMS_IC);
-  LTC6811_wrcfg(TOTAL_IC, BMS_IC);
+void set_ic_discharge(
+    int Cell,            // The cell to be discharged
+    uint8_t current_ic,  // The subsystem of the selected IC to be discharge
+    uint8_t total_ic,    // Number of ICs in the system
+    cell_asic *ic        // A two dimensional array that will store the data
+) {
+  if ((Cell < 9) && (Cell != 0)) {
+    ic[current_ic].config.tx_data[4] =
+        ic[current_ic].config.tx_data[4] | (1 << (Cell - 1));
+  } else if (Cell < 13) {
+    ic[current_ic].config.tx_data[5] =
+        ic[current_ic].config.tx_data[5] | (1 << (Cell - 9));
+  }
 }
 
-void calculate() {  // calculate minimal and maxium (cmd 92)
+void calculate() {  // calculate minimal and maxium
   int8_t error = 0;
   uint32_t conv_time = 0;
 
@@ -289,11 +378,10 @@ void calculate() {  // calculate minimal and maxium (cmd 92)
           : 1;
     }
   }
-  temp_detect();
+  // temp_detect();
 }
 
 void check_stat() {
-  calculate();
   switch (status) {
     case fault:
       for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
@@ -301,13 +389,19 @@ void check_stat() {
           status = work;
         }
       }
+      if (status == fault) {
+        stop_all_discharge();
+        // exit(1);
+      }
       break;
     case work:
       for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
         if (vmax[current_ic] >= 4.25 || vmin[current_ic] <= 2.8) {
           status = fault;
         } else if (vmax[current_ic] >= 4.2) {
-          balance();
+          set_all_discharge();
+        } else {
+          stop_all_discharge();
         }
       }
       break;
@@ -316,7 +410,9 @@ void check_stat() {
         if (vmax[current_ic] >= 4.25 || vmin[current_ic] <= 2.8) {
           status = fault;
         } else if (vmax[current_ic] >= 4.12) {
-          balance();
+          set_all_discharge();
+        } else {
+          stop_all_discharge();
         }
       }
       break;
@@ -324,109 +420,13 @@ void check_stat() {
       status = fault;
   }
 }
-// ************ belows are waited to be eliminated **************
-/*
-void starttowork() {
-  Serial.println("StartToWork");
-  calculate();
-  if (start_balance) {
-    battery_charge_balance();
+
+void reset_vmin() {
+  for (int i = 0; i < TOTAL_IC; i++) {
+    consvmin[i] = vmin[i];  // Set up a costant Vminimum in case of the
+                            // minumum become lower and lower
   }
-  if (start_discharge) {
-    moniV();
-    Serial.println(F("Discharging!!!!!!!"));
-  }
-  return;
 }
-
-void moniV()  // Every loop will Check out the Discharging cell is lower than
-              // the lowest cell or not
-{
-  uint32_t conv_time = 0;
-  int8_t error = 0;
-  bool finish = true;
-  wakeup_sleep(TOTAL_IC);
-  LTC6811_adcv(ADC_CONVERSION_MODE, ADC_DCP, CELL_CH_TO_CONVERT);
-  conv_time = LTC6811_pollAdc();
-  error = LTC6811_rdcv(SEL_ALL_REG, TOTAL_IC,
-                       BMS_IC);  // Set to read back all cell voltage registers
-  check_error(error);            // Check error to enable the function
-
-  Serial.println(F("Discharging Status :"));
-  for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-    Serial.print(F("IC "));
-    Serial.print(current_ic + 1);
-    Serial.print("  ");
-
-    for (int i = 0; i < BMS_IC[0].ic_reg.cell_channels; i++) {
-      if (BMS_IC[current_ic].cells.c_codes[i] * 0.0001 < consvmin[current_ic]) {
-        wakeup_sleep(TOTAL_IC);
-        LTC6811_clear_custom2_discharge(i + 1, current_ic, TOTAL_IC, BMS_IC);
-        LTC6811_wrcfg(TOTAL_IC, BMS_IC);
-        LTC6811_wrcfgb(TOTAL_IC, BMS_IC);
-        discharge_stat[current_ic][i] = false;  // Finish the Discharge
-      }
-      finish = finish &&
-               !(discharge_stat[current_ic]
-                               [i]);  // Have to compare the finish for all
-                                      // finish == True that Discharged finish
-      Serial.print("C");
-      Serial.print(i);
-      Serial.print(":");
-      Serial.print(discharge_stat[current_ic][i]);
-      Serial.print(" ");
-    }
-    Serial.println();
-  }
-  if (finish) {
-    start_discharge = false;
-    Serial.println(
-        F("!!!!!!!!!!!!!!!!!!!Discharge finished!!!!!!!!!!!!!!!!!!!!!"));
-  }
-
-  return;
-}  // called by starttowork
-
-void battery_charge_balance() {
-  uint32_t conv_time = 0;
-  int8_t error = 0;
-  double chargeBias_buffer = 0;
-  int light;
-  wakeup_sleep(TOTAL_IC);
-  LTC6811_adcv(ADC_CONVERSION_MODE, ADC_DCP, CELL_CH_TO_CONVERT);
-  conv_time = LTC6811_pollAdc();
-  error = LTC6811_rdcv(SEL_ALL_REG, TOTAL_IC,
-                       BMS_IC);  // Set to read back all cell voltage registers
-  check_error(error);            // Check error to enable the function
-
-  run_command('AOV');
-  for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-    light = 0;
-    chargeBias_buffer = 0;
-    for (int i = 0; i < BMS_IC[0].ic_reg.cell_channels; i++) {
-      if (light > 2) {
-        chargeBias_buffer = 0.05;
-      }
-      if (BMS_IC[current_ic].cells.c_codes[i] * 0.0001 >
-          BMS_IC[current_ic].stat.stat_codes[0] * 0.0001 * 30 / 18 + 0.05 +
-              chargeBias_buffer) {
-        light = light + 1;
-        wakeup_sleep(TOTAL_IC);
-        LTC6811_set_custom_discharge(i + 1, current_ic, TOTAL_IC, BMS_IC);
-        LTC6811_wrcfg(TOTAL_IC, BMS_IC);
-        LTC6811_wrcfgb(TOTAL_IC, BMS_IC);
-      } else {
-        wakeup_sleep(TOTAL_IC);
-        LTC6811_clear_custom2_discharge(i + 1, current_ic, TOTAL_IC, BMS_IC);
-        LTC6811_wrcfg(TOTAL_IC, BMS_IC);
-        LTC6811_wrcfgb(TOTAL_IC, BMS_IC);
-      }
-    }
-  }
-
-  return;
-}  // called by starttowork
-*/
 
 void temp_detect() {
   uint32_t conv_time = 0;
