@@ -144,6 +144,14 @@ void setup() {
   timer = 0;
   calculate();
   reset_vmin();
+
+  Serial.println("Vmin:");
+  for (int i = 0; i < TOTAL_IC; i++) {
+    Serial.print(consvmin[i]);
+    Serial.print(", ");
+  }
+  Serial.print("\n");
+
   pinMode(BMS_FAULT_PIN, OUTPUT);
 
   pinMode(stat_pin, INPUT);
@@ -152,6 +160,7 @@ void setup() {
   } else if (digitalRead(stat_pin) == LOW) {
     status = work;
   }
+  Serial.println("Setup completed");
 }
 
 void loop() {
@@ -160,14 +169,15 @@ void loop() {
   spi_enable(
       SPI_CLOCK_DIV16);  // This will set the Linduino to have a 1MHz Clock
 
-  check_stat();
+  // check_stat();
   read_voltage();  // read and print the current voltage
   calculate();     // calculate minimal and maxium
 
   // Serial.print(status);
   // Serial.print(", ");
 
-  if (millis() - timer >= 30000) {
+  if (millis() - timer >= 10000) {
+    Serial.print("Balance\n");
     balance();
     timer = millis();
   }
@@ -181,10 +191,10 @@ void loop() {
 
   // testing area **************************
   if (Serial.read() == '5') {
-    balance();
     Serial.print(
         "***********************************balance****************************"
         "****\n");
+    balance();
   } else if (Serial.read() == '6') {
     stop_all_discharge();
   }
@@ -232,7 +242,7 @@ void print_cells(uint8_t datalog_en) {  // modified
       }
     }
   }
-  Serial.println("\n");
+  Serial.print("\n");
 }
 
 void print_conv_time(uint32_t conv_time) {
@@ -311,22 +321,22 @@ void balance() {
 
   for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
     for (int i = 0; i < BMS_IC[0].ic_reg.cell_channels; i++) {
-      if (abs(BMS_IC[current_ic].cells.c_codes[i] * 0.0001) -
-              consvmin[current_ic] <=
-          0.1) {
+      if (abs(BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
+              consvmin[current_ic]) <= 0.1) {
         // build a customized one to determine the certain ic/cell to stop
         // discharge
+        Serial.println("stop balance");
         LTC6811_clear_discharge(TOTAL_IC, BMS_IC);
         LTC6811_wrcfg(TOTAL_IC, BMS_IC);
-      } else if ((BMS_IC[current_ic].cells.c_codes[i] * 0.0001) -
-                     consvmin[current_ic] >
-                 0.1) {
+      } else if ((BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
+                  consvmin[current_ic]) > 0.1) {
+        Serial.println("start balance");
         set_ic_discharge(i + 1, current_ic, TOTAL_IC, BMS_IC);
         LTC6811_wrcfg(TOTAL_IC, BMS_IC);
-      } else if ((BMS_IC[current_ic].cells.c_codes[i] * 0.0001) -
-                     consvmin[current_ic] <
-                 -0.1) {
-        reset_vmin();
+      } else if ((BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
+                  consvmin[current_ic]) < -0.1) {
+        Serial.println("do nothing");
+        // reset_vmin();
       }
     }
   }
