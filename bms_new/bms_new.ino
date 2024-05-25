@@ -19,7 +19,6 @@
 #define DATALOG_DISABLED 0
 /****** Custom ******/
 #define BMS_FAULT_PIN 2
-/****** Custom ******/
 #define stat_pin 2  // In response to the PCB design pinout
 
 /**************** Local Function Declaration *******************/
@@ -153,13 +152,13 @@ void setup() {
 
   Serial.println("Vmin:");
   for (int i = 0; i < TOTAL_IC; i++) {
-    Serial.print(consvmin[i]);
+    Serial.print(F(consvmin[i]));
     Serial.print(", ");
   }
   Serial.print("\n");
 
   pinMode(BMS_FAULT_PIN, OUTPUT);
-  
+
   pinMode(stat_pin, INPUT);
   (digitalRead(stat_pin) == HIGH) ? status = CHARGE : status = WORK;
 
@@ -172,7 +171,7 @@ void loop() {
   calculate();     // calculate minimal and maxium
 
   if (millis() - timer >= 10000) {
-    Serial.print("Balance\n");
+    Serial.print(F("Balance\n"));
     balance();
     timer = millis();
   }
@@ -252,8 +251,7 @@ void print_cells(uint8_t datalog_en) {  // modified
     } else {
       // Serial.print(" Cells :");
       for (int i = 0; i < BMS_IC[0].ic_reg.cell_channels; i++) {
-        // Set non-read cells to 0 rather than 6.5535 for the sake of
-        // readability
+        // Set non-read cells to 0 rather than 6.5535 
         if (BMS_IC[current_ic].cells.c_codes[i] == 65535) {
           Serial.print(float(0), 4);
         } else {
