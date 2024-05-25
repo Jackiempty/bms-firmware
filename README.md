@@ -26,7 +26,7 @@ Basically you go to [this website](https://github.com/analogdevicesinc/Linduino)
 ## bms-firmware environment setup
 
 Ok, back to the topic:  
-All the file and documents that you need for setting up the environment are uploaded to [Github](https://github.com/ncku-formula-racing/bms-firmware), so the only thing you have to do is to either clone it to your local repository or download the zip and uncompress it, the point is the progresses that you have to execute after downloading the file.  
+All the file and documents that you need for setting up the environment are uploaded to [Github](https://github.com/ncku-formula-racing/bms-firmware/tree/Old_version), so the only thing you have to do is to either clone it to your local repository or download the zip and uncompress it, the point is the progresses that you have to execute after downloading the file.  
 
 Start up your Arduino IDE and follow the step in [Environment](https://hackmd.io/@nckufs/ryvS1uIgA#Environment) to select the reference path of your library, after that, go back to the main page of your code and then try to click the `verify` buttom and see if it can be compiled properly or not. If you succeeded then it will be fine, but in case of you having any problem, leave a comment or go ask **簡誌加** or **張庭瑋**.  
 
