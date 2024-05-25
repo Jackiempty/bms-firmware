@@ -19,7 +19,6 @@
 #define DATALOG_DISABLED 0
 /****** Custom ******/
 #define BMS_FAULT_PIN 2
-/****** Custom ******/
 #define stat_pin 2  // In response to the PCB design pinout
 
 /**************** Local Function Declaration *******************/
@@ -31,17 +30,23 @@ void print_conv_time(uint32_t conv_time);
 void read_voltage();
 void set_all_discharge();
 void stop_all_discharge();
+void check_stat();
 void balance();
 void calculate();
-void check_stat();
 void reset_vmin();
 void set_ic_discharge(   // Add to balance function formally when compeleted
     int Cell,            // The cell to be discharged
     uint8_t current_ic,  // The subsystem of the selected IC to be discharge
-    uint8_t total_ic,    // Number of ICs in the system
+    cell_asic *ic        // A two dimensional array that will store the data
+);
+void stop_ic_discharge(
+    int Cell,            // The cell to stop discharging
+    uint8_t current_ic,  // The subsystem of the selected IC to discharging
     cell_asic *ic        // A two dimensional array that will store the data
 );
 void temp_detect();  // called by calculate
+/****** Test ******/
+void select(int ic, int cell);
 
 /*******************************************************************
   Setup Variables
@@ -101,9 +106,9 @@ double vmax[TOTAL_IC];
 double consvmin[TOTAL_IC];
 unsigned long timer;
 enum stats {
-  fault,
-  work,
-  charge,
+  FAULT,
+  WORK,
+  CHARGE,
 };
 
 stats status;
@@ -147,7 +152,7 @@ void setup() {
 
   Serial.println("Vmin:");
   for (int i = 0; i < TOTAL_IC; i++) {
-    Serial.print(consvmin[i]);
+    Serial.print(F(consvmin[i]));
     Serial.print(", ");
   }
   Serial.print("\n");
@@ -155,48 +160,63 @@ void setup() {
   pinMode(BMS_FAULT_PIN, OUTPUT);
 
   pinMode(stat_pin, INPUT);
-  if (digitalRead(stat_pin) == HIGH) {
-    status = charge;
-  } else if (digitalRead(stat_pin) == LOW) {
-    status = work;
-  }
+  (digitalRead(stat_pin) == HIGH) ? status = CHARGE : status = WORK;
+
   Serial.println("Setup completed");
 }
 
 void loop() {
-  SPI.begin();
-  quikeval_SPI_connect();
-  spi_enable(
-      SPI_CLOCK_DIV16);  // This will set the Linduino to have a 1MHz Clock
-
   // check_stat();
   read_voltage();  // read and print the current voltage
   calculate();     // calculate minimal and maxium
 
-  // Serial.print(status);
-  // Serial.print(", ");
-
   if (millis() - timer >= 10000) {
-    Serial.print("Balance\n");
+    Serial.print(F("Balance\n"));
     balance();
     timer = millis();
   }
 
-  if (status == fault) {
-    digitalWrite(BMS_FAULT_PIN, HIGH);
-  } else {
-    digitalWrite(BMS_FAULT_PIN, LOW);
-  }
   delay(100);
 
-  // testing area **************************
-  if (Serial.read() == '5') {
-    Serial.print(
-        "***********************************balance****************************"
-        "****\n");
-    balance();
-  } else if (Serial.read() == '6') {
-    stop_all_discharge();
+  // *********************** testing area **************************
+  if (Serial.available() > 0) {
+    switch (Serial.read()) {
+      case '5':
+        // Serial.print(
+        //     "*********************************** dicharge all "
+        //     "****************************"
+        //     "****\n");
+        set_all_discharge();
+        break;
+      case '6':
+        // Serial.print(
+        //     "*********************************** stop discharge "
+        //     "****************************"
+        //     "****\n");
+        stop_all_discharge();
+        break;
+      case '7':
+        // Serial.print(
+        //     "*********************************** select "
+        //     "****************************"
+        //     "****\n");
+        select(0, 3);
+        select(1, 8);
+        break;
+      case '8':
+        // Serial.print(
+        //     "*********************************** reset vmin "
+        //     "****************************"
+        //     "****\n");
+        reset_vmin();
+        break;
+      default:
+        // Serial.print(
+        //     "*********************************** do nothing "
+        //     "****************************"
+        //     "****\n");
+        break;
+    }
   }
 }
 
@@ -204,7 +224,7 @@ void loop() {
 /****** Stock ******/
 void check_error(int error) {
   if (error == -1) {
-    // Serial.println(F("A PEC error was detected in the received data"));
+    Serial.println(F("A PEC error was detected in the received data"));
   }
 }
 
@@ -218,27 +238,26 @@ void print_cells(uint8_t datalog_en) {  // modified
         // Serial.print(" C");
         // Serial.print(i + 1, DEC);
         // Serial.print(":");
-        // Set non-read cells to 0 rather than 6.5535 for the sake of
-        // readability
+
+        // Set non-read cells to 0 rather than 6.5535
         if (BMS_IC[current_ic].cells.c_codes[i] == 65535) {
-          Serial.print(0, 4);
+          Serial.print(float(0), 4);
         } else {
           Serial.print(BMS_IC[current_ic].cells.c_codes[i] * 0.0001, 4);
         }
-        Serial.print(",");
+        Serial.print(", ");
       }
       // Serial.println();
     } else {
       // Serial.print(" Cells :");
       for (int i = 0; i < BMS_IC[0].ic_reg.cell_channels; i++) {
-        // Set non-read cells to 0 rather than 6.5535 for the sake of
-        // readability
+        // Set non-read cells to 0 rather than 6.5535 
         if (BMS_IC[current_ic].cells.c_codes[i] == 65535) {
-          Serial.print(0, 4);
+          Serial.print(float(0), 4);
         } else {
           Serial.print(BMS_IC[current_ic].cells.c_codes[i] * 0.0001, 4);
         }
-        Serial.print(",");
+        Serial.print(", ");
       }
     }
   }
@@ -277,7 +296,6 @@ void set_all_discharge() {
   uint32_t conv_time = 0;
 
   wakeup_sleep(TOTAL_IC);
-  LTC6811_adcv(ADC_CONVERSION_MODE, ADC_DCP, CELL_CH_TO_CONVERT);
   conv_time = LTC6811_pollAdc();
   error = LTC6811_rdcfg(TOTAL_IC, BMS_IC);
   check_error(error);  // Check error to enable the function
@@ -288,25 +306,63 @@ void set_all_discharge() {
     LTC6811_wrcfg(TOTAL_IC, BMS_IC);
   }
 
-  // Serial.println(F("----------start discharge----------"));
+  Serial.println(F("--------- start discharge ---------"));
 }
 
 void stop_all_discharge() {
   int8_t error = 0;
   uint32_t conv_time = 0;
 
-  // Serial.println(F("Stop all discharge !!"));
   wakeup_sleep(TOTAL_IC);
-  LTC6811_adcv(ADC_CONVERSION_MODE, ADC_DCP, CELL_CH_TO_CONVERT);
   conv_time = LTC6811_pollAdc();
   error = LTC6811_rdcv(SEL_ALL_REG, TOTAL_IC, BMS_IC);
   check_error(error);
 
-  // Serial.println(F("----------Stop balance----------"));
+  Serial.println(F("---------- stop balance ----------"));
 
   wakeup_sleep(TOTAL_IC);
   LTC6811_clear_discharge(TOTAL_IC, BMS_IC);
   LTC6811_wrcfg(TOTAL_IC, BMS_IC);
+}
+
+void check_stat() {
+  read_voltage();  // read and print the current voltage
+  calculate();     // calculate minimal and maxium
+  switch (status) {
+    case fault:
+      for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
+        if (vmax[current_ic] <= 4.25 && vmin[current_ic] >= 2.8) {
+          status = WORK;
+        }
+      }
+      (status == FAULT) ? digitalWrite(BMS_FAULT_PIN, HIGH)
+                        : digitalWrite(BMS_FAULT_PIN, LOW);
+      break;
+    case work:
+      for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
+        if (vmax[current_ic] >= 4.25 || vmin[current_ic] <= 2.8) {
+          status = FAULT;
+        } else if (vmax[current_ic] >= 4.2) {
+          set_all_discharge();
+        } else {
+          stop_all_discharge();
+        }
+      }
+      break;
+    case charge:
+      for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
+        if (vmax[current_ic] >= 4.25 || vmin[current_ic] <= 2.8) {
+          status = FAULT;
+        } else if (vmax[current_ic] >= 4.12) {
+          set_all_discharge();
+        } else {
+          stop_all_discharge();
+        }
+      }
+      break;
+    default:
+      status = FAULT;
+  }
 }
 
 void balance() {
@@ -323,19 +379,23 @@ void balance() {
     for (int i = 0; i < BMS_IC[0].ic_reg.cell_channels; i++) {
       if (abs(BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
               consvmin[current_ic]) <= 0.1) {
-        // build a customized one to determine the certain ic/cell to stop
-        // discharge
-        Serial.println("stop balance");
-        LTC6811_clear_discharge(TOTAL_IC, BMS_IC);
+        Serial.print(abs(BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
+                         consvmin[current_ic]));
+        Serial.println(", stop balance");
+        stop_ic_discharge(i + 1, TOTAL_IC, BMS_IC);
         LTC6811_wrcfg(TOTAL_IC, BMS_IC);
       } else if ((BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
                   consvmin[current_ic]) > 0.1) {
-        Serial.println("start balance");
+        Serial.print(BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
+                     consvmin[current_ic]);
+        Serial.println(", start balance");
         set_ic_discharge(i + 1, current_ic, TOTAL_IC, BMS_IC);
         LTC6811_wrcfg(TOTAL_IC, BMS_IC);
       } else if ((BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
                   consvmin[current_ic]) < -0.1) {
-        Serial.println("do nothing");
+        Serial.print(BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
+                     consvmin[current_ic]);
+        Serial.println(", do nothing");
         // reset_vmin();
       }
     }
@@ -345,7 +405,6 @@ void balance() {
 void set_ic_discharge(
     int Cell,            // The cell to be discharged
     uint8_t current_ic,  // The subsystem of the selected IC to be discharge
-    uint8_t total_ic,    // Number of ICs in the system
     cell_asic *ic        // A two dimensional array that will store the data
 ) {
   if ((Cell < 9) && (Cell != 0)) {
@@ -354,6 +413,65 @@ void set_ic_discharge(
   } else if (Cell < 13) {
     ic[current_ic].config.tx_data[5] =
         ic[current_ic].config.tx_data[5] | (1 << (Cell - 9));
+  }
+}
+
+void stop_ic_discharge(
+    int Cell,            // The cell to stop discharging
+    uint8_t current_ic,  // The subsystem of the selected IC to discharging
+    cell_asic *ic        // A two dimensional array that will store the data
+) {
+  switch (Cell) {
+    case 1:
+      ic[current_ic].config.tx_data[4] =
+          ic[current_ic].config.tx_data[4] & (0xFE);
+      break;
+    case 2:
+      ic[current_ic].config.tx_data[4] =
+          ic[current_ic].config.tx_data[4] & (0xFD);
+      break;
+    case 3:
+      ic[current_ic].config.tx_data[4] =
+          ic[current_ic].config.tx_data[4] & (0xFB);
+      break;
+    case 4:
+      ic[current_ic].config.tx_data[4] =
+          ic[current_ic].config.tx_data[4] & (0xF7);
+      break;
+    case 5:
+      ic[current_ic].config.tx_data[4] =
+          ic[current_ic].config.tx_data[4] & (0xEF);
+      break;
+    case 6:
+      ic[current_ic].config.tx_data[4] =
+          ic[current_ic].config.tx_data[4] & (0xDF);
+      break;
+    case 7:
+      ic[current_ic].config.tx_data[4] =
+          ic[current_ic].config.tx_data[4] & (0xBF);
+      break;
+    case 8:
+      ic[current_ic].config.tx_data[4] =
+          ic[current_ic].config.tx_data[4] & (0x7F);
+      break;
+    case 9:
+      ic[current_ic].config.tx_data[5] =
+          ic[current_ic].config.tx_data[5] & (0xFE);
+      break;
+    case 10:
+      ic[current_ic].config.tx_data[5] =
+          ic[current_ic].config.tx_data[5] & (0xFD);
+      break;
+    case 11:
+      ic[current_ic].config.tx_data[5] =
+          ic[current_ic].config.tx_data[5] & (0xFB);
+      break;
+    case 12:
+      ic[current_ic].config.tx_data[5] =
+          ic[current_ic].config.tx_data[5] & (0xF7);
+      break;
+    default:
+      break;
   }
 }
 
@@ -378,47 +496,6 @@ void calculate() {  // calculate minimal and maxium
           : 1;
     }
   }
-  // temp_detect();
-}
-
-void check_stat() {
-  switch (status) {
-    case fault:
-      for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-        if (vmax[current_ic] <= 4.25 && vmin[current_ic] >= 2.8) {
-          status = work;
-        }
-      }
-      if (status == fault) {
-        stop_all_discharge();
-        // exit(1);
-      }
-      break;
-    case work:
-      for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-        if (vmax[current_ic] >= 4.25 || vmin[current_ic] <= 2.8) {
-          status = fault;
-        } else if (vmax[current_ic] >= 4.2) {
-          set_all_discharge();
-        } else {
-          stop_all_discharge();
-        }
-      }
-      break;
-    case charge:
-      for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-        if (vmax[current_ic] >= 4.25 || vmin[current_ic] <= 2.8) {
-          status = fault;
-        } else if (vmax[current_ic] >= 4.12) {
-          set_all_discharge();
-        } else {
-          stop_all_discharge();
-        }
-      }
-      break;
-    default:
-      status = fault;
-  }
 }
 
 void reset_vmin() {
@@ -426,6 +503,20 @@ void reset_vmin() {
     consvmin[i] = vmin[i];  // Set up a costant Vminimum in case of the
                             // minumum become lower and lower
   }
+}
+
+void select(int ic, int cell) {
+  int8_t error = 0;
+  uint32_t conv_time = 0;
+
+  wakeup_sleep(TOTAL_IC);
+  conv_time = LTC6811_pollAdc();
+  error = LTC6811_rdcfg(TOTAL_IC, BMS_IC);
+  check_error(error);  // Check error to enable the function
+
+  wakeup_sleep(TOTAL_IC);
+  set_ic_discharge(cell, ic, TOTAL_IC, BMS_IC);
+  LTC6811_wrcfg(TOTAL_IC, BMS_IC);
 }
 
 void temp_detect() {
