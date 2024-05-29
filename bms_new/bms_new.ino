@@ -27,11 +27,13 @@ void check_error(int error);
 void print_cells(uint8_t datalog_en);
 void print_conv_time(uint32_t conv_time);
 /****** Custom ******/
+void work();
+void charge();
 void read_voltage();
 void set_all_discharge();
 void stop_all_discharge();
+void balance(double min_thr, double max_thr);
 void check_stat();
-void balance();
 void calculate();
 void reset_vmin();
 void set_ic_discharge(   // Add to balance function formally when compeleted
@@ -104,13 +106,11 @@ cell_asic BMS_IC[TOTAL_IC];  //!< Global Battery Variable
 double vmin[TOTAL_IC];
 double vmax[TOTAL_IC];
 double consvmin[TOTAL_IC];
-unsigned long timer;
 enum stats {
   FAULT,
   WORK,
   CHARGE,
 };
-
 stats status;
 
 /*********************************************************
@@ -146,7 +146,6 @@ void setup() {
   LTC6811_reset_crc_count(TOTAL_IC, BMS_IC);
   LTC6811_init_reg_limits(TOTAL_IC, BMS_IC);
 
-  timer = 0;
   calculate();
   reset_vmin();
 
@@ -162,7 +161,7 @@ void setup() {
   pinMode(STATE_PIN, INPUT);
   (digitalRead(STATE_PIN) == HIGH) ? status = CHARGE : status = WORK;
 
-  Serial.println("Setup completed");
+  Serial.println(F("Setup completed"));
 }
 
 void loop() {
@@ -170,15 +169,21 @@ void loop() {
   read_voltage();  // read and print the current voltage
   calculate();     // calculate minimal and maxium
 
-  if (millis() - timer >= 10000) {
-    Serial.print(F("Balance\n"));
-    balance();
-    timer = millis();
+  switch (status) {
+    case (WORK):
+      work();
+      break;
+    case (CHARGE):
+      charge();
+      break;
+    default:
+      break;
   }
 
-  delay(2000);
+  delay(1000);
 
   // *********************** testing area **************************
+
   if (Serial.available() > 0) {
     switch (Serial.read()) {
       case '5':
@@ -272,6 +277,18 @@ void print_conv_time(uint32_t conv_time) {
   // Serial.println(F("ms \n"));
 }
 /****** Custom ******/
+void work() {  // thresholds are yet to be determined
+  Serial.print(F("Check state\n"));
+  reset_vmin();
+  balance();
+}
+
+void charge() {  // thresholds are yet to be determined
+  Serial.print(F("Check state\n"));
+  reset_vmin();
+  balance();
+}
+
 void read_voltage() {
   int8_t error = 0;
   uint32_t conv_time = 0;
@@ -296,7 +313,7 @@ void set_all_discharge() {
   uint32_t conv_time = 0;
 
   wakeup_sleep(TOTAL_IC);
-  for (int i = 0; i < BMS_IC[0].ic_reg.cell_channels; i++) {g
+  for (int i = 0; i < BMS_IC[0].ic_reg.cell_channels; i++) {
     wakeup_sleep(TOTAL_IC);
     LTC6811_set_discharge(i + 1, TOTAL_IC, BMS_IC);
     LTC6811_wrcfg(TOTAL_IC, BMS_IC);
@@ -323,17 +340,12 @@ void stop_all_discharge() {
 }
 
 void check_stat() {
+  stop_all_discharge();
   read_voltage();  // read and print the current voltage
   calculate();     // calculate minimal and maxium
   switch (status) {
     case FAULT:
-      stop_all_discharge();
       // Add a readpin to determine whether WORK or CHARGE
-      // for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-      //   if (vmax[current_ic] <= 4.25 && vmin[current_ic] >= 2.8) {
-      //     status = WORK;
-      //   }
-      // }
       (status == FAULT) ? digitalWrite(BMS_FAULT_PIN, HIGH)
                         : digitalWrite(BMS_FAULT_PIN, LOW);
       break;
@@ -342,9 +354,7 @@ void check_stat() {
         if (vmax[current_ic] >= 4.25 || vmin[current_ic] <= 2.8) {
           status = FAULT;
         } else if (vmax[current_ic] >= 4.2) {
-          balance();
-        } else {
-          stop_all_discharge();
+          // balance();
         }
       }
       break;
@@ -353,9 +363,7 @@ void check_stat() {
         if (vmax[current_ic] >= 4.25 || vmin[current_ic] <= 2.8) {
           status = FAULT;
         } else if (vmax[current_ic] >= 4.12) {
-          balance();
-        } else {
-          stop_all_discharge();
+          // balance();
         }
       }
       break;
@@ -365,27 +373,21 @@ void check_stat() {
   }
 }
 
-void balance() {
-  int8_t error = 0;
-
-  wakeup_sleep(TOTAL_IC);
-  error = LTC6811_rdcfg(TOTAL_IC, BMS_IC);
-  check_error(error);  // Check error to enable the function
-
+void balance(double min_thr, double max_thr) {
   for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
     for (int i = 0; i < BMS_IC[0].ic_reg.cell_channels; i++) {
       if (abs(BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
               consvmin[current_ic]) <= 0.1) {
         Serial.print(abs(BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
                          consvmin[current_ic]));
-        Serial.println(", stop balance");
+        Serial.println(", stop discharge");
         stop_ic_discharge(i + 1, TOTAL_IC, BMS_IC);
         LTC6811_wrcfg(TOTAL_IC, BMS_IC);
       } else if ((BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
                   consvmin[current_ic]) > 0.1) {
         Serial.print(BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
                      consvmin[current_ic]);
-        Serial.println(", start balance");
+        Serial.println(", dischage");
         set_ic_discharge(i + 1, current_ic, BMS_IC);
         LTC6811_wrcfg(TOTAL_IC, BMS_IC);
       } else if ((BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
@@ -476,11 +478,6 @@ void calculate() {  // calculate minimal and maxium
   int8_t error = 0;
   uint32_t conv_time = 0;
 
-  wakeup_sleep(TOTAL_IC);
-  LTC6811_adcv(ADC_CONVERSION_MODE, ADC_DCP, CELL_CH_TO_CONVERT);
-  error = LTC6811_rdcv(SEL_ALL_REG, TOTAL_IC,
-                       BMS_IC);  // Set to read back all cell voltage registers
-  check_error(error);
   for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
     vmin[current_ic] = 5;
     vmax[current_ic] = 0;
