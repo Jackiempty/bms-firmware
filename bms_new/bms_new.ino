@@ -1,5 +1,6 @@
 /************************* Includes ***************************/
 #include <Arduino.h>
+#include <DueTimer.h>
 #include <SPI.h>
 #include <stdint.h>
 
@@ -27,6 +28,7 @@ void check_error(int error);
 void print_cells(uint8_t datalog_en);
 void print_conv_time(uint32_t conv_time);
 /****** Custom ******/
+void ISR();
 void work();
 void charge();
 void read_voltage();
@@ -146,6 +148,9 @@ void setup() {
   LTC6811_reset_crc_count(TOTAL_IC, BMS_IC);
   LTC6811_init_reg_limits(TOTAL_IC, BMS_IC);
 
+  // Not quite yet, hence commented
+  // Timer0.attachInterrupt(ISR).setFrequency(10).start();
+
   calculate();
   reset_vmin();
 
@@ -169,21 +174,8 @@ void loop() {
   read_voltage();  // read and print the current voltage
   calculate();     // calculate minimal and maxium
 
-  switch (status) {
-    case (WORK):
-      work();
-      break;
-    case (CHARGE):
-      charge();
-      break;
-    default:
-      break;
-  }
-
   delay(1000);
-
   // *********************** testing area **************************
-
   if (Serial.available() > 0) {
     switch (Serial.read()) {
       case '5':
@@ -277,16 +269,30 @@ void print_conv_time(uint32_t conv_time) {
   // Serial.println(F("ms \n"));
 }
 /****** Custom ******/
+void ISR() {  // Interrupt main
+  check_stat();
+  switch (status) {
+    case (WORK):
+      work();
+      break;
+    case (CHARGE):
+      charge();
+      break;
+    default:
+      break;
+  }
+}
+
 void work() {  // thresholds are yet to be determined
   Serial.print(F("Check state\n"));
   reset_vmin();
-  balance();
+  // balance(); // Arg aka thresholds are yet to be determined
 }
 
 void charge() {  // thresholds are yet to be determined
   Serial.print(F("Check state\n"));
   reset_vmin();
-  balance();
+  // balance(); // Arg aka thresholds are yet to be determined
 }
 
 void read_voltage() {
@@ -526,12 +532,12 @@ void temp_detect() {
 
   const float THSourceVoltage = 3.0;
   const int THRES = 10000;
-  const float RT0 = 10000;  // 常溫 25度時的 NTC 電阻值
-  const float RT1 = 32650;  // 0度時的 NTC 電阻值
-  const float RT2 = 588.6;  // 105度時的 NTC 電阻值
-  const float T0 = 298.15;  // 常溫 25度時的 Kelvin 值
-  const float T1 = 273.15;  // 0度時的 Kelvin 值
-  const float T2 = 378.15;  // 105度時的 Kelvin 值
+  const float RT0 = 10000;  // The NTC resistance during 25 deg C
+  const float RT1 = 32650;  // The NTC resistance during 0 deg C
+  const float RT2 = 588.6;  // The NTC resistance during 100 deg C
+  const float T0 = 298.15;  // The Kelvin during 25 deg C
+  const float T1 = 273.15;  // The Kelvin during 0 deg C
+  const float T2 = 378.15;  // The Kelvin during 105 deg C
 
   for (int current_ic = 0; current_ic < TOTAL_IC;
        current_ic++)  // 2 5 not work  //0 1 3 4 7 detect
@@ -565,11 +571,11 @@ void temp_detect() {
         VoltageOut = BMS_IC[current_ic].aux.a_codes[i] * 0.0001;
 
         ROut = THRES * VoltageOut /
-               (THSourceVoltage - VoltageOut);  // 目前 NTC 電阻值
+               (THSourceVoltage - VoltageOut);  // current NTC resistance
         KelvinValue = (beta / log(ROut / Rx));
 
         BMS_IC[current_ic].aux.a_codes[i] =
-            KelvinValue - 273.15;  // Kelvin 轉 溫度C
+            KelvinValue - 273.15;  // Kelvin to deg C
       }
     }
   }
