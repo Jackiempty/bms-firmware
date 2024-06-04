@@ -1,6 +1,6 @@
 /************************* Includes ***************************/
 #include <Arduino.h>
-// #include <DueTimer.h>
+#include <DueTimer.h>
 #include <SPI.h>
 #include <stdint.h>
 
@@ -20,7 +20,7 @@
 #define DATALOG_DISABLED 0
 /****** Custom ******/
 #define BMS_FAULT_PIN 2
-#define STATE_PIN 1  // In response to the PCB design pinout
+#define STATE_PIN 3  // In response to the PCB design pinout
 
 /**************** Local Function Declaration *******************/
 /****** Stock ******/
@@ -112,7 +112,6 @@ bool DCTOBITS[4] = {true, false, true, false};
 
 void setup() {
   Serial.begin(115200);
-  Serial.println("Vmin:");
   quikeval_SPI_connect();
   spi_enable(
       SPI_CLOCK_DIV16);  // This will set the Linduino to have a 1MHz Clock
@@ -126,8 +125,7 @@ void setup() {
 
   // Not quite yet, hence commented
   // Timer0.attachInterrupt(Isr).setFrequency(10).start();
-  
-
+  Serial.println("Vmin:");
   calculate();
   reset_vmin();
 
@@ -150,7 +148,8 @@ void loop() {
   // check_stat();
   read_voltage();  // read and print the current voltage
   calculate();     // calculate minimal and maxium
-
+  temp_detect();
+  
   delay(1000);
   // *********************** testing area **************************
   if (Serial.available() > 0) {
@@ -231,9 +230,9 @@ void print_conv_time(uint32_t conv_time) {
   // Serial.println(F("ms \n"));
 }
 /****** Custom ******/
-// void Isr() {  // Interrupt main
-//   check_stat();
-// }
+void Isr() {  // Interrupt main
+  check_stat();
+}
 
 void work_loop() {  // thresholds are yet to be determined
   Serial.print(F("Work\n"));
@@ -333,33 +332,33 @@ void check_stat() {
   }
 }
 
-// void balance(double min_thr, double max_thr) {
-//   for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-//     for (int i = 0; i < BMS_IC[0].ic_reg.cell_channels; i++) {
-//       if (abs(BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
-//               consvmin[current_ic]) <= 0.1) {
-//         Serial.print(abs(BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
-//                          consvmin[current_ic]));
-//         Serial.println(", stop discharge");
-//         stop_ic_discharge(i + 1, TOTAL_IC, BMS_IC);
-//         LTC6811_wrcfg(TOTAL_IC, BMS_IC);
-//       } else if ((BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
-//                   consvmin[current_ic]) > 0.1) {
-//         Serial.print(BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
-//                      consvmin[current_ic]);
-//         Serial.println(", dischage");
-//         set_ic_discharge(i + 1, current_ic, BMS_IC);
-//         LTC6811_wrcfg(TOTAL_IC, BMS_IC);
-//       } else if ((BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
-//                   consvmin[current_ic]) < -0.1) {
-//         Serial.print(BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
-//                      consvmin[current_ic]);
-//         Serial.println(", do nothing");
-//         // reset_vmin();
-//       }
-//     }
-//   }
-// }
+void balance(double min_thr, double max_thr) {
+  for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
+    for (int i = 0; i < BMS_IC[0].ic_reg.cell_channels; i++) {
+      if (abs(BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
+              consvmin[current_ic]) <= 0.1) {
+        Serial.print(abs(BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
+                         consvmin[current_ic]));
+        Serial.println(", stop discharge");
+        stop_ic_discharge(i + 1, TOTAL_IC, BMS_IC);
+        LTC6811_wrcfg(TOTAL_IC, BMS_IC);
+      } else if ((BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
+                  consvmin[current_ic]) > 0.1) {
+        Serial.print(BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
+                     consvmin[current_ic]);
+        Serial.println(", dischage");
+        set_ic_discharge(i + 1, current_ic, BMS_IC);
+        LTC6811_wrcfg(TOTAL_IC, BMS_IC);
+      } else if ((BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
+                  consvmin[current_ic]) < -0.1) {
+        Serial.print(BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
+                     consvmin[current_ic]);
+        Serial.println(", do nothing");
+        // reset_vmin();
+      }
+    }
+  }
+}
 
 void set_ic_discharge(
     int Cell,            // The cell to be discharged
@@ -473,73 +472,73 @@ void select(int ic, int cell) {
   LTC6811_wrcfg(TOTAL_IC, BMS_IC);
 }
 
-// void temp_detect() {
-//   uint32_t conv_time = 0;
-//   int8_t error = 0;
-//   wakeup_sleep(TOTAL_IC);
-//   LTC6811_adax(ADC_CONVERSION_MODE, AUX_CH_TO_CONVERT);
-//   conv_time = LTC6811_pollAdc();
-//   error =
-//       LTC6811_rdaux(0, TOTAL_IC, BMS_IC);  // Set to read back all aux registers
-//   check_error(error);
-//   delay(100);
+void temp_detect() {
+  uint32_t conv_time = 0;
+  int8_t error = 0;
+  wakeup_sleep(TOTAL_IC);
+  LTC6811_adax(ADC_CONVERSION_MODE, AUX_CH_TO_CONVERT);
+  conv_time = LTC6811_pollAdc();
+  error =
+      LTC6811_rdaux(0, TOTAL_IC, BMS_IC);  // Set to read back all aux registers
+  check_error(error);
+  delay(100);
 
-//   const float THSourceVoltage = 3.0;
-//   const int THRES = 10000;
-//   const float RT0 = 10000;  // The NTC resistance during 25 deg C
-//   const float RT1 = 32650;  // The NTC resistance during 0 deg C
-//   const float RT2 = 588.6;  // The NTC resistance during 100 deg C
-//   const float T0 = 298.15;  // The Kelvin during 25 deg C
-//   const float T1 = 273.15;  // The Kelvin during 0 deg C
-//   const float T2 = 378.15;  // The Kelvin during 105 deg C
+  const float THSourceVoltage = 3.0;
+  const int THRES = 10000;
+  const float RT0 = 10000;  // The NTC resistance during 25 deg C
+  const float RT1 = 32650;  // The NTC resistance during 0 deg C
+  const float RT2 = 588.6;  // The NTC resistance during 100 deg C
+  const float T0 = 298.15;  // The Kelvin during 25 deg C
+  const float T1 = 273.15;  // The Kelvin during 0 deg C
+  const float T2 = 378.15;  // The Kelvin during 105 deg C
 
-//   for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-//     for (int i = 0; i < 12; i++) {
-//       Serial.print(BMS_IC[current_ic].aux.a_codes[i]);
-//       Serial.print(", ");
-//     }
-//   }
-//   for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-//     for (int i = 0; i < 12; i++) {
-//       // GPIO->V
-//       // 10V/(5-V)= R = 10*exp(3984*(1/T-1/298.15))
-//       // Rt = R*EXP(B*(1/T1-1/T2))
-//       if (BMS_IC[current_ic].aux.a_codes[i] != 0) {
-//         float VoltageOut;
-//         float ROut;
-//         float beta;
-//         float Rx;
-//         float KelvinValue;
+  for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
+    for (int i = 0; i < 12; i++) {
+      Serial.print(BMS_IC[current_ic].aux.a_codes[i]);
+      Serial.print(", ");
+    }
+  }
+  for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
+    for (int i = 0; i < 12; i++) {
+      // GPIO->V
+      // 10V/(5-V)= R = 10*exp(3984*(1/T-1/298.15))
+      // Rt = R*EXP(B*(1/T1-1/T2))
+      if (BMS_IC[current_ic].aux.a_codes[i] != 0) {
+        float VoltageOut;
+        float ROut;
+        float beta;
+        float Rx;
+        float KelvinValue;
 
-//         beta = (log(RT1 / RT2)) / ((1 / T1) - (1 / T2));
-//         Rx = RT0 * exp(-beta / T0);
+        beta = (log(RT1 / RT2)) / ((1 / T1) - (1 / T2));
+        Rx = RT0 * exp(-beta / T0);
 
-//         VoltageOut = BMS_IC[current_ic].aux.a_codes[i] * 0.0001;
+        VoltageOut = BMS_IC[current_ic].aux.a_codes[i] * 0.0001;
 
-//         ROut = THRES * VoltageOut /
-//                (THSourceVoltage - VoltageOut);  // current NTC resistance
-//         KelvinValue = (beta / log(ROut / Rx));
+        ROut = THRES * VoltageOut /
+               (THSourceVoltage - VoltageOut);  // current NTC resistance
+        KelvinValue = (beta / log(ROut / Rx));
 
-//         BMS_IC[current_ic].aux.a_codes[i] =
-//             KelvinValue - 273.15;  // Kelvin to deg C
-//       }
-//     }
-//   }
-//   error_temp();
-// }
+        BMS_IC[current_ic].aux.a_codes[i] =
+            KelvinValue - 273.15;  // Kelvin to deg C
+      }
+    }
+  }
+  error_temp();
+}
 
-// void error_temp() {
-//   for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-//     for (int i = 0; i < 12; i++) {
-//       if (BMS_IC[current_ic].aux.a_codes[i] > 60) {
-//         Serial.println(
-//             F("************* Over maximum Temperature *************"));
-//         status = FAULT;
-//       }
-//       if (BMS_IC[current_ic].aux.a_codes[i] <= 0) {
-//         Serial.println(
-//             F("************* Temprature plug has gone *************"));
-//       }
-//     }
-//   }
-// }
+void error_temp() {
+  for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
+    for (int i = 0; i < 12; i++) {
+      if (BMS_IC[current_ic].aux.a_codes[i] > 60) {
+        Serial.println(
+            F("************* Over maximum Temperature *************"));
+        status = FAULT;
+      }
+      if (BMS_IC[current_ic].aux.a_codes[i] <= 0) {
+        Serial.println(
+            F("************* Temprature plug has gone *************"));
+      }
+    }
+  }
+}
