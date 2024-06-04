@@ -28,7 +28,7 @@ void check_error(int error);
 void print_cells(uint8_t datalog_en);
 void print_conv_time(uint32_t conv_time);
 /****** Custom ******/
-void ISR();
+void Isr();
 void work();
 void charge();
 void read_voltage();
@@ -49,6 +49,7 @@ void stop_ic_discharge(
     cell_asic *ic        // A two dimensional array that will store the data
 );
 void temp_detect();  // called by calculate
+void error_temp();   // detect temperature rules violation
 /****** Test ******/
 void select(int ic, int cell);
 
@@ -149,7 +150,7 @@ void setup() {
   LTC6811_init_reg_limits(TOTAL_IC, BMS_IC);
 
   // Not quite yet, hence commented
-  // Timer0.attachInterrupt(ISR).setFrequency(10).start();
+  // Timer0.attachInterrupt(Isr).setFrequency(10).start();
 
   calculate();
   reset_vmin();
@@ -179,39 +180,24 @@ void loop() {
   if (Serial.available() > 0) {
     switch (Serial.read()) {
       case '5':
-        // Serial.print(
-        //     "*********************************** dicharge all "
-        //     "****************************"
-        //     "****\n");
+        Serial.print("******* dicharge all *******\n");
         set_all_discharge();
         break;
       case '6':
-        // Serial.print(
-        //     "*********************************** stop discharge "
-        //     "****************************"
-        //     "****\n");
+        Serial.print("****** stop discharge ******\n");
         stop_all_discharge();
         break;
       case '7':
-        // Serial.print(
-        //     "*********************************** select "
-        //     "****************************"
-        //     "****\n");
+        Serial.print("********** select **********\n");
         select(0, 3);
         select(1, 8);
         break;
       case '8':
-        // Serial.print(
-        //     "*********************************** reset vmin "
-        //     "****************************"
-        //     "****\n");
+        Serial.print("********* reset vmin *******\n");
         reset_vmin();
         break;
       default:
-        // Serial.print(
-        //     "*********************************** do nothing "
-        //     "****************************"
-        //     "****\n");
+        Serial.print("******** do nothing ********\n");
         break;
     }
   }
@@ -269,7 +255,7 @@ void print_conv_time(uint32_t conv_time) {
   // Serial.println(F("ms \n"));
 }
 /****** Custom ******/
-void ISR() {  // Interrupt main
+void Isr() {  // Interrupt main
   check_stat();
   switch (status) {
     case (WORK):
@@ -284,13 +270,13 @@ void ISR() {  // Interrupt main
 }
 
 void work() {  // thresholds are yet to be determined
-  Serial.print(F("Check state\n"));
+  Serial.print(F("Work\n"));
   reset_vmin();
   // balance(); // Arg aka thresholds are yet to be determined
 }
 
 void charge() {  // thresholds are yet to be determined
-  Serial.print(F("Check state\n"));
+  Serial.print(F("Charge\n"));
   reset_vmin();
   // balance(); // Arg aka thresholds are yet to be determined
 }
@@ -349,6 +335,7 @@ void check_stat() {
   stop_all_discharge();
   read_voltage();  // read and print the current voltage
   calculate();     // calculate minimal and maxium
+  temp_detect();   // measure temperature and detect error
   switch (status) {
     case FAULT:
       // Add a readpin to determine whether WORK or CHARGE
@@ -525,8 +512,7 @@ void temp_detect() {
   wakeup_sleep(TOTAL_IC);
   LTC6811_adax(ADC_CONVERSION_MODE, AUX_CH_TO_CONVERT);
   conv_time = LTC6811_pollAdc();
-  error =
-      LTC6811_rdaux(0, TOTAL_IC, BMS_IC);  // Set to read back all aux registers
+  error = LTC6811_rdaux(0, TOTAL_IC, BMS_IC);  // Set to read back all aux registers
   check_error(error);
   delay(100);
 
@@ -539,24 +525,18 @@ void temp_detect() {
   const float T1 = 273.15;  // The Kelvin during 0 deg C
   const float T2 = 378.15;  // The Kelvin during 105 deg C
 
-  for (int current_ic = 0; current_ic < TOTAL_IC;
-       current_ic++)  // 2 5 not work  //0 1 3 4 7 detect
-  {
+  for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
     for (int i = 0; i < 12; i++) {
       Serial.print(BMS_IC[current_ic].aux.a_codes[i]);
       Serial.print(", ");
     }
-
-    Serial.println("###############");
-    Serial.println();
   }
   float tf = 0;
-  for (int current_ic = 0; current_ic < TOTAL_IC;
-       current_ic++)  // 2 5 not work  //0 1 3 4 7 detect
-  {
-    for (int i = 0; i < 8;
-         i++) {  // GPIO->V   10V/(5-V)=R=10*exp(3984*(1/T-1/298.15)) Rt = R
-                 // *EXP(B*(1/T1-1/T2))
+  for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
+    for (int i = 0; i < 12; i++) {
+      // GPIO->V
+      // 10V/(5-V)= R = 10*exp(3984*(1/T-1/298.15))
+      // Rt = R*EXP(B*(1/T1-1/T2))
       if (BMS_IC[current_ic].aux.a_codes[i] != 0) {
         float value;
         float VoltageOut;
@@ -576,6 +556,23 @@ void temp_detect() {
 
         BMS_IC[current_ic].aux.a_codes[i] =
             KelvinValue - 273.15;  // Kelvin to deg C
+      }
+    }
+  }
+  error_temp();
+}
+
+void error_temp() {
+  for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
+    for (int i = 0; i < 12; i++) {
+      if (BMS_IC[current_ic].aux.a_codes[i] > 60) {
+        Serial.println(
+            F("************* Over maximum Temperature *************"));
+        status = FAULT;
+      }
+      if (BMS_IC[current_ic].aux.a_codes[i] <= 0) {
+        Serial.println(
+            F("************* Temprature plug has gone *************"));
       }
     }
   }
