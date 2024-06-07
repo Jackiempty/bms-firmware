@@ -129,7 +129,6 @@ void setup() {
   calculate();
   reset_vmin();
 
-  
   for (int i = 0; i < TOTAL_IC; i++) {
     Serial.print(consvmin[i]);
     Serial.print(", ");
@@ -146,10 +145,10 @@ void setup() {
 
 void loop() {
   // check_stat();
-  read_voltage();  // read and print the current voltage
-  calculate();     // calculate minimal and maxium
-  temp_detect();
-  
+  // read_voltage();  // read and print the current voltage
+  // calculate();     // calculate minimal and maxium
+  // temp_detect();
+
   delay(1000);
   // *********************** testing area **************************
   if (Serial.available() > 0) {
@@ -171,6 +170,8 @@ void loop() {
         Serial.print("********* reset vmin *******\n");
         reset_vmin();
         break;
+      case '9':
+        status = WORK;
       default:
         Serial.print("******** do nothing ********\n");
         break;
@@ -300,7 +301,7 @@ void check_stat() {
   stop_all_discharge();
   read_voltage();  // read and print the current voltage
   calculate();     // calculate minimal and maxium
-  temp_detect();   // measure temperature and detect error
+  // temp_detect();   // measure temperature and detect error
   switch (status) {
     case FAULT:
       // Add a readpin to eliminate FAULT
@@ -340,7 +341,6 @@ void balance(double min_thr, double max_thr) {
         Serial.print(abs(BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
                          consvmin[current_ic]));
         Serial.println(", stop discharge");
-        stop_ic_discharge(i + 1, TOTAL_IC, BMS_IC);
         LTC6811_wrcfg(TOTAL_IC, BMS_IC);
       } else if ((BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
                   consvmin[current_ic]) > 0.1) {
@@ -353,8 +353,7 @@ void balance(double min_thr, double max_thr) {
                   consvmin[current_ic]) < -0.1) {
         Serial.print(BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
                      consvmin[current_ic]);
-        Serial.println(", do nothing");
-        // reset_vmin();
+        Serial.println(", the other stop discharge");
       }
     }
   }
@@ -493,13 +492,14 @@ void temp_detect() {
   const float T2 = 378.15;  // The Kelvin during 105 deg C
 
   for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-    for (int i = 0; i < 12; i++) {
+    for (int i = 0; i < 8; i++) {
       Serial.print(BMS_IC[current_ic].aux.a_codes[i]);
       Serial.print(", ");
     }
   }
+  Serial.print("\n");
   for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-    for (int i = 0; i < 12; i++) {
+    for (int i = 0; i < 8; i++) {
       // GPIO->V
       // 10V/(5-V)= R = 10*exp(3984*(1/T-1/298.15))
       // Rt = R*EXP(B*(1/T1-1/T2))
@@ -529,15 +529,17 @@ void temp_detect() {
 
 void error_temp() {
   for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-    for (int i = 0; i < 12; i++) {
+    for (int i = 0; i < 8; i++) {
       if (BMS_IC[current_ic].aux.a_codes[i] > 60) {
+        Serial.print(i);
         Serial.println(
-            F("************* Over maximum Temperature *************"));
+            F(": ************* Over maximum Temperature *************"));
         status = FAULT;
       }
       if (BMS_IC[current_ic].aux.a_codes[i] <= 0) {
+        Serial.print(i);
         Serial.println(
-            F("************* Temprature plug has gone *************"));
+            F(": ************* Temprature plug has gone *************"));
       }
     }
   }
