@@ -124,7 +124,7 @@ void setup() {
   LTC6811_init_reg_limits(TOTAL_IC, BMS_IC);
 
   // Not quite yet, hence commented
-  // Timer0.attachInterrupt(Isr).setFrequency(10).start();
+  Timer0.attachInterrupt(Isr).setFrequency(10).start();
   Serial.println("Vmin:");
   calculate();
   reset_vmin();
