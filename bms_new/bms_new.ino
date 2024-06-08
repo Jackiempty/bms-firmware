@@ -491,13 +491,7 @@ void temp_detect() {
   const float T1 = 273.15;  // The Kelvin during 0 deg C
   const float T2 = 378.15;  // The Kelvin during 105 deg C
 
-  for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-    for (int i = 0; i < 8; i++) {
-      Serial.print(BMS_IC[current_ic].aux.a_codes[i]);
-      Serial.print(", ");
-    }
-  }
-  Serial.print("\n");
+  
   for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
     for (int i = 0; i < 8; i++) {
       // GPIO->V
@@ -524,6 +518,13 @@ void temp_detect() {
       }
     }
   }
+  for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
+    for (int i = 0; i < 8; i++) {
+      Serial.print(BMS_IC[current_ic].aux.a_codes[i]);
+      Serial.print(", ");
+    }
+  }
+  Serial.print("\n");
   error_temp();
 }
 
