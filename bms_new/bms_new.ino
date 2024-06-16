@@ -34,7 +34,7 @@ void charge_loop();
 void read_voltage();
 void set_all_discharge();
 void stop_all_discharge();
-void balance(double min_thr, double max_thr);
+void balance(double threshold);
 void check_stat();
 void calculate();
 void reset_vmin();
@@ -238,13 +238,13 @@ void Isr() {  // Interrupt main
 void work_loop() {  // thresholds are yet to be determined
   Serial.print(F("Work\n"));
   reset_vmin();
-  // balance(); // Arg aka thresholds are yet to be determined
+  balance(0.3); // Arg = I*R when working
 }
 
 void charge_loop() {  // thresholds are yet to be determined
   Serial.print(F("Charge\n"));
   reset_vmin();
-  // balance(); // Arg aka thresholds are yet to be determined
+  balance(0.3); // Arg = 0.3, or charging I*R
 }
 
 void read_voltage() {
@@ -333,24 +333,24 @@ void check_stat() {
   }
 }
 
-void balance(double min_thr, double max_thr) {
+void balance(double threshold) {
   for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
     for (int i = 0; i < BMS_IC[0].ic_reg.cell_channels; i++) {
       if (abs(BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
-              consvmin[current_ic]) <= 0.1) {
+              consvmin[current_ic]) <= threshold) {
         Serial.print(abs(BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
                          consvmin[current_ic]));
         Serial.println(", stop discharge");
         LTC6811_wrcfg(TOTAL_IC, BMS_IC);
       } else if ((BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
-                  consvmin[current_ic]) > 0.1) {
+                  consvmin[current_ic]) > threshold) {
         Serial.print(BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
                      consvmin[current_ic]);
         Serial.println(", dischage");
         set_ic_discharge(i + 1, current_ic, BMS_IC);
         LTC6811_wrcfg(TOTAL_IC, BMS_IC);
       } else if ((BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
-                  consvmin[current_ic]) < -0.1) {
+                  consvmin[current_ic]) < -threshold) {
         Serial.print(BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
                      consvmin[current_ic]);
         Serial.println(", the other stop discharge");
@@ -493,7 +493,7 @@ void temp_detect() {
 
   
   for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-    for (int i = 0; i < 8; i++) {
+    for (int i = 0; i < 5; i++) {
       // GPIO->V
       // 10V/(5-V)= R = 10*exp(3984*(1/T-1/298.15))
       // Rt = R*EXP(B*(1/T1-1/T2))
@@ -519,7 +519,7 @@ void temp_detect() {
     }
   }
   for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-    for (int i = 0; i < 8; i++) {
+    for (int i = 0; i < 5; i++) {
       Serial.print(BMS_IC[current_ic].aux.a_codes[i]);
       Serial.print(", ");
     }
@@ -530,7 +530,7 @@ void temp_detect() {
 
 void error_temp() {
   for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-    for (int i = 0; i < 8; i++) {
+    for (int i = 0; i < 5; i++) {
       if (BMS_IC[current_ic].aux.a_codes[i] > 60) {
         Serial.print(i);
         Serial.println(
