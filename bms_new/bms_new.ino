@@ -20,7 +20,7 @@
 #define DATALOG_DISABLED 0
 /****** Custom ******/
 #define BMS_FAULT_PIN 2
-#define STATE_PIN 1  // In response to the PCB design pinout
+#define STATE_PIN 3  // In response to the PCB design pinout
 
 /**************** Local Function Declaration *******************/
 /****** Stock ******/
@@ -28,13 +28,13 @@ void check_error(int error);
 void print_cells(uint8_t datalog_en);
 void print_conv_time(uint32_t conv_time);
 /****** Custom ******/
-void ISR();
-void work();
-void charge();
+void Isr();
+void work_loop();
+void charge_loop();
 void read_voltage();
 void set_all_discharge();
 void stop_all_discharge();
-void balance(double min_thr, double max_thr);
+void balance(double threshold);
 void check_stat();
 void calculate();
 void reset_vmin();
@@ -49,6 +49,7 @@ void stop_ic_discharge(
     cell_asic *ic        // A two dimensional array that will store the data
 );
 void temp_detect();  // called by calculate
+void error_temp();   // detect temperature rules violation
 /****** Test ******/
 void select(int ic, int cell);
 
@@ -60,47 +61,28 @@ void select(int ic, int cell);
 const uint8_t TOTAL_IC = 2;  //!< Number of ICs in the daisy chain
 
 // ADC Command Configurations. See LTC681x.h for options.
-const uint8_t ADC_OPT = ADC_OPT_DISABLED;          //!< ADC Mode option bit
-const uint8_t ADC_CONVERSION_MODE = MD_7KHZ_3KHZ;  //!< ADC Mode
-const uint8_t ADC_DCP = DCP_ENABLED;               //!< Discharge Permitted
-const uint8_t CELL_CH_TO_CONVERT =
-    CELL_CH_ALL;  //!< Channel Selection for ADC conversion
-const uint8_t AUX_CH_TO_CONVERT =
-    AUX_CH_ALL;  //!< Channel Selection for ADC conversion
-const uint8_t STAT_CH_TO_CONVERT =
-    STAT_CH_ALL;                      //!< Channel Selection for ADC conversion
-const uint8_t SEL_ALL_REG = REG_ALL;  //!< Register Selection
-const uint8_t SEL_REG_A = REG_1;      //!< Register Selection
-const uint8_t SEL_REG_B = REG_2;      //!< Register Selection
+const uint8_t ADC_OPT = ADC_OPT_DISABLED;
+const uint8_t ADC_CONVERSION_MODE = MD_7KHZ_3KHZ;
+const uint8_t ADC_DCP = DCP_ENABLED;
+const uint8_t CELL_CH_TO_CONVERT = CELL_CH_ALL;
+const uint8_t AUX_CH_TO_CONVERT = AUX_CH_ALL;
+const uint8_t STAT_CH_TO_CONVERT = STAT_CH_ALL;
+const uint8_t SEL_ALL_REG = REG_ALL;
+const uint8_t SEL_REG_A = REG_1;
+const uint8_t SEL_REG_B = REG_2;
 
-const uint16_t MEASUREMENT_LOOP_TIME = 500;  //!< Loop Time in milliseconds(ms)
+const uint16_t MEASUREMENT_LOOP_TIME = 500;
 
 // Under Voltage and Over Voltage Thresholds
-const uint16_t OV_THRESHOLD =
-    41000;  //!< Over voltage threshold ADC Code. LSB = 0.0001 ---(4.1V)
-const uint16_t UV_THRESHOLD =
-    30000;  //!< Under voltage threshold ADC Code. LSB = 0.0001 ---(3V)
+const uint16_t OV_THRESHOLD = 41000;
+const uint16_t UV_THRESHOLD = 30000;
 
-// Loop Measurement Setup. These Variables are ENABLED or DISABLED. Remember ALL
-// CAPS
-const uint8_t WRITE_CONFIG =
-    DISABLED;  //!< This is to ENABLED or DISABLED writing into to configuration
-               //!< registers in a continuous loop
-const uint8_t READ_CONFIG =
-    DISABLED;  //!< This is to ENABLED or DISABLED reading the configuration
-               //!< registers in a continuous loop
-const uint8_t MEASURE_CELL =
-    ENABLED;  //!< This is to ENABLED or DISABLED measuring the cell voltages in
-              //!< a continuous loop
-const uint8_t MEASURE_AUX =
-    DISABLED;  //!< This is to ENABLED or DISABLED reading the auxiliary
-               //!< registers in a continuous loop
-const uint8_t MEASURE_STAT =
-    DISABLED;  //!< This is to ENABLED or DISABLED reading the status registers
-               //!< in a continuous loop
-const uint8_t PRINT_PEC =
-    DISABLED;  //!< This is to ENABLED or DISABLED printing the PEC Error Count
-               //!< in a continuous loop
+const uint8_t WRITE_CONFIG = DISABLED;
+const uint8_t READ_CONFIG = DISABLED;
+const uint8_t MEASURE_CELL = ENABLED;
+const uint8_t MEASURE_AUX = DISABLED;
+const uint8_t MEASURE_STAT = DISABLED;
+const uint8_t PRINT_PEC = DISABLED;
 
 cell_asic BMS_IC[TOTAL_IC];  //!< Global Battery Variable
 
@@ -121,19 +103,12 @@ stats status;
 **********************************************************/
 bool REFON = true;    //!< Reference Powered Up Bit
 bool ADCOPT = false;  //!< ADC Mode option bit
-bool GPIOBITS_A[5] = {false, false, true, true,
-                      true};  //!< GPIO Pin Control // Gpio 1,2,3,4,5
-uint16_t UV = UV_THRESHOLD;   //!< Under-voltage Comparison Voltage
-uint16_t OV = OV_THRESHOLD;   //!< Over-voltage Comparison Voltage
-bool DCCBITS_A[12] = {
-    false, false, false, false, false, false,
-    false, false, false, false, false, false};  //!< Discharge cell switch //Dcc
-                                                //!< 1,2,3,4,5,6,7,8,9,10,11,12
-bool DCTOBITS[4] = {
-    true, false, true,
-    false};  //!< Discharge time value // Dcto 0,1,2,3 // Programed for 4 min
-/*Ensure that Dcto bits are set according to the required discharge time. Refer
- * to the data sheet */
+bool GPIOBITS_A[5] = {false, false, true, true, true};
+uint16_t UV = UV_THRESHOLD;  //!< Under-voltage Comparison Voltage
+uint16_t OV = OV_THRESHOLD;  //!< Over-voltage Comparison Voltage
+bool DCCBITS_A[12] = {false, false, false, false, false, false,
+                      false, false, false, false, false, false};
+bool DCTOBITS[4] = {true, false, true, false};
 
 void setup() {
   Serial.begin(115200);
@@ -149,12 +124,11 @@ void setup() {
   LTC6811_init_reg_limits(TOTAL_IC, BMS_IC);
 
   // Not quite yet, hence commented
-  // Timer0.attachInterrupt(ISR).setFrequency(10).start();
-
+  Timer0.attachInterrupt(Isr).setFrequency(10).start();
+  Serial.println("Vmin:");
   calculate();
   reset_vmin();
 
-  Serial.println("Vmin:");
   for (int i = 0; i < TOTAL_IC; i++) {
     Serial.print(consvmin[i]);
     Serial.print(", ");
@@ -171,47 +145,35 @@ void setup() {
 
 void loop() {
   // check_stat();
-  read_voltage();  // read and print the current voltage
-  calculate();     // calculate minimal and maxium
+  // read_voltage();  // read and print the current voltage
+  // calculate();     // calculate minimal and maxium
+  // temp_detect();
 
   delay(1000);
   // *********************** testing area **************************
   if (Serial.available() > 0) {
     switch (Serial.read()) {
       case '5':
-        // Serial.print(
-        //     "*********************************** dicharge all "
-        //     "****************************"
-        //     "****\n");
+        Serial.print("******* dicharge all *******\n");
         set_all_discharge();
         break;
       case '6':
-        // Serial.print(
-        //     "*********************************** stop discharge "
-        //     "****************************"
-        //     "****\n");
+        Serial.print("****** stop discharge ******\n");
         stop_all_discharge();
         break;
       case '7':
-        // Serial.print(
-        //     "*********************************** select "
-        //     "****************************"
-        //     "****\n");
+        Serial.print("********** select **********\n");
         select(0, 3);
         select(1, 8);
         break;
       case '8':
-        // Serial.print(
-        //     "*********************************** reset vmin "
-        //     "****************************"
-        //     "****\n");
+        Serial.print("********* reset vmin *******\n");
         reset_vmin();
         break;
+      case '9':
+        status = WORK;
       default:
-        // Serial.print(
-        //     "*********************************** do nothing "
-        //     "****************************"
-        //     "****\n");
+        Serial.print("******** do nothing ********\n");
         break;
     }
   }
@@ -269,30 +231,20 @@ void print_conv_time(uint32_t conv_time) {
   // Serial.println(F("ms \n"));
 }
 /****** Custom ******/
-void ISR() {  // Interrupt main
+void Isr() {  // Interrupt main
   check_stat();
-  switch (status) {
-    case (WORK):
-      work();
-      break;
-    case (CHARGE):
-      charge();
-      break;
-    default:
-      break;
-  }
 }
 
-void work() {  // thresholds are yet to be determined
-  Serial.print(F("Check state\n"));
+void work_loop() {  // thresholds are yet to be determined
+  Serial.print(F("Work\n"));
   reset_vmin();
-  // balance(); // Arg aka thresholds are yet to be determined
+  balance(0.3); // Arg = I*R when working
 }
 
-void charge() {  // thresholds are yet to be determined
-  Serial.print(F("Check state\n"));
+void charge_loop() {  // thresholds are yet to be determined
+  Serial.print(F("Charge\n"));
   reset_vmin();
-  // balance(); // Arg aka thresholds are yet to be determined
+  balance(0.3); // Arg = 0.3, or charging I*R
 }
 
 void read_voltage() {
@@ -349,18 +301,19 @@ void check_stat() {
   stop_all_discharge();
   read_voltage();  // read and print the current voltage
   calculate();     // calculate minimal and maxium
+  // temp_detect();   // measure temperature and detect error
   switch (status) {
     case FAULT:
-      // Add a readpin to determine whether WORK or CHARGE
-      (status == FAULT) ? digitalWrite(BMS_FAULT_PIN, HIGH)
-                        : digitalWrite(BMS_FAULT_PIN, LOW);
+      // Add a readpin to eliminate FAULT
+      digitalWrite(BMS_FAULT_PIN, HIGH);
       break;
     case WORK:
       for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
         if (vmax[current_ic] >= 4.25 || vmin[current_ic] <= 2.8) {
           status = FAULT;
         } else if (vmax[current_ic] >= 4.2) {
-          // balance();
+          work_loop();
+          digitalWrite(BMS_FAULT_PIN, LOW);
         }
       }
       break;
@@ -369,7 +322,8 @@ void check_stat() {
         if (vmax[current_ic] >= 4.25 || vmin[current_ic] <= 2.8) {
           status = FAULT;
         } else if (vmax[current_ic] >= 4.12) {
-          // balance();
+          charge_loop();
+          digitalWrite(BMS_FAULT_PIN, LOW);
         }
       }
       break;
@@ -379,29 +333,27 @@ void check_stat() {
   }
 }
 
-void balance(double min_thr, double max_thr) {
+void balance(double threshold) {
   for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
     for (int i = 0; i < BMS_IC[0].ic_reg.cell_channels; i++) {
       if (abs(BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
-              consvmin[current_ic]) <= 0.1) {
+              consvmin[current_ic]) <= threshold) {
         Serial.print(abs(BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
                          consvmin[current_ic]));
         Serial.println(", stop discharge");
-        stop_ic_discharge(i + 1, TOTAL_IC, BMS_IC);
         LTC6811_wrcfg(TOTAL_IC, BMS_IC);
       } else if ((BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
-                  consvmin[current_ic]) > 0.1) {
+                  consvmin[current_ic]) > threshold) {
         Serial.print(BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
                      consvmin[current_ic]);
         Serial.println(", dischage");
         set_ic_discharge(i + 1, current_ic, BMS_IC);
         LTC6811_wrcfg(TOTAL_IC, BMS_IC);
       } else if ((BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
-                  consvmin[current_ic]) < -0.1) {
+                  consvmin[current_ic]) < -threshold) {
         Serial.print(BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
                      consvmin[current_ic]);
-        Serial.println(", do nothing");
-        // reset_vmin();
+        Serial.println(", the other stop discharge");
       }
     }
   }
@@ -539,26 +491,13 @@ void temp_detect() {
   const float T1 = 273.15;  // The Kelvin during 0 deg C
   const float T2 = 378.15;  // The Kelvin during 105 deg C
 
-  for (int current_ic = 0; current_ic < TOTAL_IC;
-       current_ic++)  // 2 5 not work  //0 1 3 4 7 detect
-  {
-    for (int i = 0; i < 12; i++) {
-      Serial.print(BMS_IC[current_ic].aux.a_codes[i]);
-      Serial.print(", ");
-    }
-
-    Serial.println("###############");
-    Serial.println();
-  }
-  float tf = 0;
-  for (int current_ic = 0; current_ic < TOTAL_IC;
-       current_ic++)  // 2 5 not work  //0 1 3 4 7 detect
-  {
-    for (int i = 0; i < 8;
-         i++) {  // GPIO->V   10V/(5-V)=R=10*exp(3984*(1/T-1/298.15)) Rt = R
-                 // *EXP(B*(1/T1-1/T2))
+  
+  for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
+    for (int i = 0; i < 5; i++) {
+      // GPIO->V
+      // 10V/(5-V)= R = 10*exp(3984*(1/T-1/298.15))
+      // Rt = R*EXP(B*(1/T1-1/T2))
       if (BMS_IC[current_ic].aux.a_codes[i] != 0) {
-        float value;
         float VoltageOut;
         float ROut;
         float beta;
@@ -576,6 +515,32 @@ void temp_detect() {
 
         BMS_IC[current_ic].aux.a_codes[i] =
             KelvinValue - 273.15;  // Kelvin to deg C
+      }
+    }
+  }
+  for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
+    for (int i = 0; i < 5; i++) {
+      Serial.print(BMS_IC[current_ic].aux.a_codes[i]);
+      Serial.print(", ");
+    }
+  }
+  Serial.print("\n");
+  error_temp();
+}
+
+void error_temp() {
+  for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
+    for (int i = 0; i < 5; i++) {
+      if (BMS_IC[current_ic].aux.a_codes[i] > 60) {
+        Serial.print(i);
+        Serial.println(
+            F(": ************* Over maximum Temperature *************"));
+        status = FAULT;
+      }
+      if (BMS_IC[current_ic].aux.a_codes[i] <= 0) {
+        Serial.print(i);
+        Serial.println(
+            F(": ************* Temprature plug has gone *************"));
       }
     }
   }
