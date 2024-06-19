@@ -20,7 +20,7 @@
 #define DATALOG_DISABLED 0
 /****** Custom ******/
 #define BMS_FAULT_PIN 2
-#define STATE_PIN 3  // In response to the PCB design pinout
+//#define STATE_PIN 3  // In response to the PCB design pinout
 
 /**************** Local Function Declaration *******************/
 /****** Stock ******/
@@ -58,7 +58,7 @@ void select(int ic, int cell);
   The following variables can be modified to configure the software.
 ********************************************************************/
 /****************** Stock *******************/
-const uint8_t TOTAL_IC = 2;  //!< Number of ICs in the daisy chain
+const uint8_t TOTAL_IC = 4;  //!< Number of ICs in the daisy chain
 
 // ADC Command Configurations. See LTC681x.h for options.
 const uint8_t ADC_OPT = ADC_OPT_DISABLED;
@@ -96,6 +96,7 @@ enum stats {
   CHARGE,
 };
 stats status;
+uint32_t temp[TOTAL_IC][12];
 
 /*********************************************************
  Set the configuration bits.
@@ -103,7 +104,7 @@ stats status;
 **********************************************************/
 bool REFON = true;    //!< Reference Powered Up Bit
 bool ADCOPT = false;  //!< ADC Mode option bit
-bool GPIOBITS_A[5] = {false, false, true, true, true};
+bool GPIOBITS_A[5] = {true, true, true, true, true};
 uint16_t UV = UV_THRESHOLD;  //!< Under-voltage Comparison Voltage
 uint16_t OV = OV_THRESHOLD;  //!< Over-voltage Comparison Voltage
 bool DCCBITS_A[12] = {false, false, false, false, false, false,
@@ -124,7 +125,7 @@ void setup() {
   LTC6811_init_reg_limits(TOTAL_IC, BMS_IC);
 
   // Not quite yet, hence commented
-  Timer0.attachInterrupt(Isr).setFrequency(10).start();
+  // Timer0.attachInterrupt(Isr).setFrequency(1).start();
   Serial.println("Vmin:");
   calculate();
   reset_vmin();
@@ -137,14 +138,15 @@ void setup() {
 
   pinMode(BMS_FAULT_PIN, OUTPUT);
 
-  pinMode(STATE_PIN, INPUT);
-  (digitalRead(STATE_PIN) == HIGH) ? status = CHARGE : status = WORK;
+  // pinMode(STATE_PIN, INPUT);
+  // (digitalRead(STATE_PIN) == HIGH) ? status = CHARGE : status = WORK;
+  status = WORK;
 
   Serial.println(F("Setup completed"));
 }
 
 void loop() {
-  // check_stat();
+  check_stat();
   // read_voltage();  // read and print the current voltage
   // calculate();     // calculate minimal and maxium
   // temp_detect();
@@ -232,6 +234,7 @@ void print_conv_time(uint32_t conv_time) {
 }
 /****** Custom ******/
 void Isr() {  // Interrupt main
+  Serial.print("loop\n");
   check_stat();
 }
 
@@ -294,18 +297,19 @@ void stop_all_discharge() {
   error = LTC6811_rdcfg(TOTAL_IC, BMS_IC);
   check_error(error);
 
-  Serial.println(F("---------- stop discharge ----------"));
+  // Serial.println(F("---------- stop discharge ----------"));
 }
 
 void check_stat() {
   stop_all_discharge();
   read_voltage();  // read and print the current voltage
   calculate();     // calculate minimal and maxium
-  // temp_detect();   // measure temperature and detect error
+  temp_detect();   // measure temperature and detect error
   switch (status) {
     case FAULT:
       // Add a readpin to eliminate FAULT
       digitalWrite(BMS_FAULT_PIN, HIGH);
+      Serial.print("********** FAULT **********\n\n");
       break;
     case WORK:
       for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
@@ -474,6 +478,8 @@ void select(int ic, int cell) {
 void temp_detect() {
   uint32_t conv_time = 0;
   int8_t error = 0;
+  int r_index[5] = {0,1,3,4,7};
+
   wakeup_sleep(TOTAL_IC);
   LTC6811_adax(ADC_CONVERSION_MODE, AUX_CH_TO_CONVERT);
   conv_time = LTC6811_pollAdc();
@@ -502,7 +508,7 @@ void temp_detect() {
         float ROut;
         float beta;
         float Rx;
-        float KelvinValue;
+        uint32_t KelvinValue;
 
         beta = (log(RT1 / RT2)) / ((1 / T1) - (1 / T2));
         Rx = RT0 * exp(-beta / T0);
@@ -513,17 +519,19 @@ void temp_detect() {
                (THSourceVoltage - VoltageOut);  // current NTC resistance
         KelvinValue = (beta / log(ROut / Rx));
 
-        BMS_IC[current_ic].aux.a_codes[i] =
+        temp[current_ic][i] =
             KelvinValue - 273.15;  // Kelvin to deg C
       }
     }
   }
+
   for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
     for (int i = 0; i < 5; i++) {
-      Serial.print(BMS_IC[current_ic].aux.a_codes[i]);
+      Serial.print(temp[current_ic][i]);
       Serial.print(", ");
     }
   }
+
   Serial.print("\n");
   error_temp();
 }
@@ -531,13 +539,13 @@ void temp_detect() {
 void error_temp() {
   for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
     for (int i = 0; i < 5; i++) {
-      if (BMS_IC[current_ic].aux.a_codes[i] > 60) {
+      if (temp[current_ic][i] > 60) {
         Serial.print(i);
         Serial.println(
             F(": ************* Over maximum Temperature *************"));
         status = FAULT;
       }
-      if (BMS_IC[current_ic].aux.a_codes[i] <= 0) {
+      if (temp[current_ic][i] <= 0) {
         Serial.print(i);
         Serial.println(
             F(": ************* Temprature plug has gone *************"));
