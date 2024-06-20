@@ -310,7 +310,7 @@ void check_stat() {
   switch (status) {
     case FAULT:
       // Add a readpin to eliminate FAULT
-      digitalWrite(BMS_FAULT_PIN, HIGH);
+      digitalWrite(BMS_FAULT_PIN, LOW);
       Serial.print("********** FAULT **********\n\n");
       break;
     case WORK:
@@ -319,7 +319,7 @@ void check_stat() {
           status = FAULT;
         } else if (vmax[current_ic] >= 4.2) {
           work_loop();
-          digitalWrite(BMS_FAULT_PIN, LOW);
+          digitalWrite(BMS_FAULT_PIN, HIGH);
         }
       }
       break;
@@ -329,7 +329,7 @@ void check_stat() {
           status = FAULT;
         } else if (vmax[current_ic] >= 4.12) {
           charge_loop();
-          digitalWrite(BMS_FAULT_PIN, LOW);
+          digitalWrite(BMS_FAULT_PIN, HIGH);
         }
       }
       break;
