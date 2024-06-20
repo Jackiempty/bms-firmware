@@ -58,7 +58,7 @@ void select(int ic, int cell);
   The following variables can be modified to configure the software.
 ********************************************************************/
 /****************** Stock *******************/
-const uint8_t TOTAL_IC = 4;  //!< Number of ICs in the daisy chain
+const uint8_t TOTAL_IC = 10;  //!< Number of ICs in the daisy chain
 
 // ADC Command Configurations. See LTC681x.h for options.
 const uint8_t ADC_OPT = ADC_OPT_DISABLED;
