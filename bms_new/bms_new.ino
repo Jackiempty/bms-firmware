@@ -157,7 +157,6 @@ void loop() {
   // calculate();     // calculate minimal and maxium
   // temp_detect();
 
-  delay(1000);
   // *********************** testing area **************************
   if (Serial.available() > 0) {
     switch (Serial.read()) {
@@ -185,6 +184,8 @@ void loop() {
         break;
     }
   }
+
+  delay(1000);
 }
 
 /**************** Local Function Implementation ****************/
@@ -542,18 +543,23 @@ void error_temp() {
   for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
     for (int i = 0; i < 5; i++) {
       if (temp[current_ic][i] > 60 && temp_bypass[current_ic][i] == 0) {
-        Serial.println("[");
+        Serial.print("[");
         Serial.print(current_ic + 1, DEC);
-        Serial.println("]");
-        Serial.println("[");
+        Serial.print("]");
+        Serial.print("[");
         Serial.print(i);
-        Serial.println("]");
+        Serial.print("]");
         Serial.println(
             F(": ************* Over maximum Temperature *************"));
         status = FAULT;
       }
       if (temp[current_ic][i] <= 0 && temp_bypass[current_ic][i] == 0) {
+        Serial.print("[");
+        Serial.print(current_ic + 1, DEC);
+        Serial.print("]");
+        Serial.print("[");
         Serial.print(i);
+        Serial.print("]");
         Serial.println(
             F(": ************* Temprature plug has gone *************"));
       }
