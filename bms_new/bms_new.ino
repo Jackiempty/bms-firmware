@@ -242,13 +242,11 @@ void Isr() {  // Interrupt main
 }
 
 void work_loop() {  // thresholds are yet to be determined
-  Serial.print(F("Work\n"));
   reset_vmin();
   balance(0.3);  // Arg = I*R when working
 }
 
 void charge_loop() {  // thresholds are yet to be determined
-  Serial.print(F("Charge\n"));
   reset_vmin();
   balance(0.3);  // Arg = 0.3, or charging I*R
 }
@@ -318,21 +316,23 @@ void check_stat() {
       for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
         if (vmax[current_ic] >= 4.25 || vmin[current_ic] <= 2.8) {
           status = FAULT;
-        } else if (vmax[current_ic] >= 4.2) {
+        } else {
           work_loop();
           digitalWrite(BMS_FAULT_PIN, HIGH);
         }
       }
+      Serial.print("********** WORK **********\n\n");
       break;
     case CHARGE:
       for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
         if (vmax[current_ic] >= 4.25 || vmin[current_ic] <= 2.8) {
           status = FAULT;
-        } else if (vmax[current_ic] >= 4.12) {
+        } else {
           charge_loop();
           digitalWrite(BMS_FAULT_PIN, HIGH);
         }
       }
+      Serial.print("********** CHARGE **********\n\n");
       break;
     default:
       status = FAULT;
@@ -345,22 +345,22 @@ void balance(double threshold) {
     for (int i = 0; i < BMS_IC[0].ic_reg.cell_channels; i++) {
       if (abs(BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
               consvmin[current_ic]) <= threshold) {
-        Serial.print(abs(BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
-                         consvmin[current_ic]));
-        Serial.println(", stop discharge");
+        // Serial.print(abs(BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
+        //                  consvmin[current_ic]));
+        // Serial.println(", stop discharge");
         LTC6811_wrcfg(TOTAL_IC, BMS_IC);
       } else if ((BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
                   consvmin[current_ic]) > threshold) {
-        Serial.print(BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
-                     consvmin[current_ic]);
-        Serial.println(", dischage");
+        // Serial.print(BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
+        //              consvmin[current_ic]);
+        // Serial.println(", dischage");
         set_ic_discharge(i + 1, current_ic, BMS_IC);
         LTC6811_wrcfg(TOTAL_IC, BMS_IC);
       } else if ((BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
                   consvmin[current_ic]) < -threshold) {
-        Serial.print(BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
-                     consvmin[current_ic]);
-        Serial.println(", the other stop discharge");
+        // Serial.print(BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
+        //              consvmin[current_ic]);
+        // Serial.println(", the other stop discharge");
       }
     }
   }
