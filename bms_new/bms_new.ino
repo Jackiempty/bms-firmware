@@ -146,7 +146,7 @@ void setup() {
 
   Serial.println(F("Setup completed"));
 
-  // By pass list
+  // ******** By pass list *********
   volt_bypass[9][11] = 1;
   temp_bypass[8][3] = 1;
 }
@@ -540,12 +540,14 @@ void temp_detect() {
 
 void error_temp() {
   for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-    Serial.print(" IC ");
-    Serial.print(current_ic + 1, DEC);
-    Serial.println(": ");
     for (int i = 0; i < 5; i++) {
       if (temp[current_ic][i] > 60 && temp_bypass[current_ic][i] == 0) {
+        Serial.println("[");
+        Serial.print(current_ic + 1, DEC);
+        Serial.println("]");
+        Serial.println("[");
         Serial.print(i);
+        Serial.println("]");
         Serial.println(
             F(": ************* Over maximum Temperature *************"));
         status = FAULT;
@@ -557,4 +559,5 @@ void error_temp() {
       }
     }
   }
+  Serial.print("\n");
 }
