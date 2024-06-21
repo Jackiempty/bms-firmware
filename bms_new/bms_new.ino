@@ -20,7 +20,7 @@
 #define DATALOG_DISABLED 0
 /****** Custom ******/
 #define BMS_FAULT_PIN 2
-//#define STATE_PIN 3  // In response to the PCB design pinout
+// #define STATE_PIN 3  // In response to the PCB design pinout
 
 /**************** Local Function Declaration *******************/
 /****** Stock ******/
@@ -97,6 +97,8 @@ enum stats {
 };
 stats status;
 uint32_t temp[TOTAL_IC][12];
+uint16_t volt_bypass[TOTAL_IC][12] = {0};
+uint16_t temp_bypass[TOTAL_IC][12] = {0};
 
 /*********************************************************
  Set the configuration bits.
@@ -143,6 +145,10 @@ void setup() {
   status = WORK;
 
   Serial.println(F("Setup completed"));
+
+  // ******** By pass list *********
+  volt_bypass[9][11] = 1;
+  temp_bypass[8][3] = 1;
 }
 
 void loop() {
@@ -151,7 +157,6 @@ void loop() {
   // calculate();     // calculate minimal and maxium
   // temp_detect();
 
-  delay(1000);
   // *********************** testing area **************************
   if (Serial.available() > 0) {
     switch (Serial.read()) {
@@ -179,6 +184,8 @@ void loop() {
         break;
     }
   }
+
+  delay(1000);
 }
 
 /**************** Local Function Implementation ****************/
@@ -192,14 +199,10 @@ void check_error(int error) {
 void print_cells(uint8_t datalog_en) {  // modified
   for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
     if (datalog_en == 0) {
-      // Serial.print(" IC ");
-      // Serial.print(current_ic + 1, DEC);
-      // Serial.print(": ");
+      Serial.print(" IC ");
+      Serial.print(current_ic + 1, DEC);
+      Serial.print(": ");
       for (int i = 0; i < BMS_IC[0].ic_reg.cell_channels; i++) {
-        // Serial.print(" C");
-        // Serial.print(i + 1, DEC);
-        // Serial.print(":");
-
         // Set non-read cells to 0 rather than 6.5535
         if (BMS_IC[current_ic].cells.c_codes[i] == 65535) {
           Serial.print(float(0), 4);
@@ -208,7 +211,7 @@ void print_cells(uint8_t datalog_en) {  // modified
         }
         Serial.print(", ");
       }
-      // Serial.println();
+      Serial.println();
     } else {
       // Serial.print(" Cells :");
       for (int i = 0; i < BMS_IC[0].ic_reg.cell_channels; i++) {
@@ -241,13 +244,13 @@ void Isr() {  // Interrupt main
 void work_loop() {  // thresholds are yet to be determined
   Serial.print(F("Work\n"));
   reset_vmin();
-  balance(0.3); // Arg = I*R when working
+  balance(0.3);  // Arg = I*R when working
 }
 
 void charge_loop() {  // thresholds are yet to be determined
   Serial.print(F("Charge\n"));
   reset_vmin();
-  balance(0.3); // Arg = 0.3, or charging I*R
+  balance(0.3);  // Arg = 0.3, or charging I*R
 }
 
 void read_voltage() {
@@ -308,7 +311,7 @@ void check_stat() {
   switch (status) {
     case FAULT:
       // Add a readpin to eliminate FAULT
-      digitalWrite(BMS_FAULT_PIN, HIGH);
+      digitalWrite(BMS_FAULT_PIN, LOW);
       Serial.print("********** FAULT **********\n\n");
       break;
     case WORK:
@@ -317,7 +320,7 @@ void check_stat() {
           status = FAULT;
         } else if (vmax[current_ic] >= 4.2) {
           work_loop();
-          digitalWrite(BMS_FAULT_PIN, LOW);
+          digitalWrite(BMS_FAULT_PIN, HIGH);
         }
       }
       break;
@@ -327,7 +330,7 @@ void check_stat() {
           status = FAULT;
         } else if (vmax[current_ic] >= 4.12) {
           charge_loop();
-          digitalWrite(BMS_FAULT_PIN, LOW);
+          digitalWrite(BMS_FAULT_PIN, HIGH);
         }
       }
       break;
@@ -437,19 +440,18 @@ void stop_ic_discharge(
 }
 
 void calculate() {  // calculate minimal and maxium
-  int8_t error = 0;
-  uint32_t conv_time = 0;
-
   for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
     vmin[current_ic] = 5;
     vmax[current_ic] = 0;
     for (int i = 0; i < BMS_IC[0].ic_reg.cell_channels; i++) {
-      vmin[current_ic] > BMS_IC[current_ic].cells.c_codes[i] * 0.0001
-          ? vmin[current_ic] = BMS_IC[current_ic].cells.c_codes[i] * 0.0001
-          : 1;
-      vmax[current_ic] < BMS_IC[current_ic].cells.c_codes[i] * 0.0001
-          ? vmax[current_ic] = BMS_IC[current_ic].cells.c_codes[i] * 0.0001
-          : 1;
+      if (volt_bypass[current_ic][i] == 0) {
+        vmin[current_ic] > BMS_IC[current_ic].cells.c_codes[i] * 0.0001
+            ? vmin[current_ic] = BMS_IC[current_ic].cells.c_codes[i] * 0.0001
+            : 1;
+        vmax[current_ic] < BMS_IC[current_ic].cells.c_codes[i] * 0.0001
+            ? vmax[current_ic] = BMS_IC[current_ic].cells.c_codes[i] * 0.0001
+            : 1;
+      }
     }
   }
 }
@@ -478,7 +480,6 @@ void select(int ic, int cell) {
 void temp_detect() {
   uint32_t conv_time = 0;
   int8_t error = 0;
-  int r_index[5] = {0,1,3,4,7};
 
   wakeup_sleep(TOTAL_IC);
   LTC6811_adax(ADC_CONVERSION_MODE, AUX_CH_TO_CONVERT);
@@ -497,7 +498,6 @@ void temp_detect() {
   const float T1 = 273.15;  // The Kelvin during 0 deg C
   const float T2 = 378.15;  // The Kelvin during 105 deg C
 
-  
   for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
     for (int i = 0; i < 5; i++) {
       // GPIO->V
@@ -519,17 +519,20 @@ void temp_detect() {
                (THSourceVoltage - VoltageOut);  // current NTC resistance
         KelvinValue = (beta / log(ROut / Rx));
 
-        temp[current_ic][i] =
-            KelvinValue - 273.15;  // Kelvin to deg C
+        temp[current_ic][i] = KelvinValue - 273.15;  // Kelvin to deg C
       }
     }
   }
 
   for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
+    Serial.print(" IC ");
+    Serial.print(current_ic + 1, DEC);
+    Serial.print(": ");
     for (int i = 0; i < 5; i++) {
       Serial.print(temp[current_ic][i]);
       Serial.print(", ");
     }
+    Serial.print("\n");
   }
 
   Serial.print("\n");
@@ -539,17 +542,28 @@ void temp_detect() {
 void error_temp() {
   for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
     for (int i = 0; i < 5; i++) {
-      if (temp[current_ic][i] > 60) {
+      if (temp[current_ic][i] > 60 && temp_bypass[current_ic][i] == 0) {
+        Serial.print("[");
+        Serial.print(current_ic + 1, DEC);
+        Serial.print("]");
+        Serial.print("[");
         Serial.print(i);
+        Serial.print("]");
         Serial.println(
             F(": ************* Over maximum Temperature *************"));
         status = FAULT;
       }
-      if (temp[current_ic][i] <= 0) {
+      if (temp[current_ic][i] <= 0 && temp_bypass[current_ic][i] == 0) {
+        Serial.print("[");
+        Serial.print(current_ic + 1, DEC);
+        Serial.print("]");
+        Serial.print("[");
         Serial.print(i);
+        Serial.print("]");
         Serial.println(
             F(": ************* Temprature plug has gone *************"));
       }
     }
   }
+  Serial.print("\n");
 }
