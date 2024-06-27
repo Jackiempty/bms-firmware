@@ -1,8 +1,10 @@
 /************************* Includes ***************************/
 #include <Arduino.h>
 #include <DueTimer.h>
+#include <SD.h>
 #include <SPI.h>
 #include <stdint.h>
+File SD_write;
 
 #include "LTC6811.h"
 #include "LTC681x.h"
@@ -48,8 +50,10 @@ void stop_ic_discharge(
     uint8_t current_ic,  // The subsystem of the selected IC to discharging
     cell_asic *ic        // A two dimensional array that will store the data
 );
-void temp_detect();  // called by calculate
-void error_temp();   // detect temperature rules violation
+void temp_detect();            // called by calculate
+void error_temp();             // detect temperature rules violation
+void write_fault(int reason);  // voltage out of range: 0, over heat: 1,
+                               // temp unpluged: 2, others: 3
 /****** Test ******/
 void select(int ic, int cell);
 
@@ -99,6 +103,7 @@ stats status;
 uint32_t temp[TOTAL_IC][12];
 uint16_t volt_bypass[TOTAL_IC][12] = {0};
 uint16_t temp_bypass[TOTAL_IC][12] = {0};
+bool SD_READY;
 
 /*********************************************************
  Set the configuration bits.
@@ -114,6 +119,7 @@ bool DCCBITS_A[12] = {false, false, false, false, false, false,
 bool DCTOBITS[4] = {true, false, true, false};
 
 void setup() {
+  // **************** Stock setup ****************
   Serial.begin(115200);
   quikeval_SPI_connect();
   spi_enable(
@@ -126,7 +132,32 @@ void setup() {
   LTC6811_reset_crc_count(TOTAL_IC, BMS_IC);
   LTC6811_init_reg_limits(TOTAL_IC, BMS_IC);
 
-  // Not quite yet, hence commented
+  // **************** SD card setup ****************
+  SD_READY = SD.begin(4);
+  if (!SD_READY) {
+    Serial.println("SD initialization failed!");
+  }
+  Serial.println("SD initialization done.");
+
+  // open the file. note that only one file can be open at a time,
+  // so you have to close this one before opening another.
+  SD_write = SD.open("Fault_record.txt", FILE_WRITE);
+
+  // if the file opened okay, write to it:
+  if (SD_write) {
+    Serial.print("Writing to Fault_record.txt...");
+
+    SD_write.println("testing 1, 2, 3.");  // 這裡可以填上當天的日期，時間
+
+    // close the file:
+    SD_write.close();
+  } else {
+    // if the file didn't open, print an error:
+    Serial.println("error opening Fault_record.txt");
+  }
+
+  // **************** The rest setup ****************
+  // Not working properly yet, hence commented
   // Timer0.attachInterrupt(Isr).setFrequency(1).start();
   Serial.println("Vmin:");
   calculate();
@@ -316,6 +347,7 @@ void check_stat() {
       for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
         if (vmax[current_ic] >= 4.25 || vmin[current_ic] <= 2.8) {
           status = FAULT;
+          write_fault(0);
         } else {
           work_loop();
           digitalWrite(BMS_FAULT_PIN, HIGH);
@@ -327,6 +359,7 @@ void check_stat() {
       for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
         if (vmax[current_ic] >= 4.25 || vmin[current_ic] <= 2.8) {
           status = FAULT;
+          write_fault(0);
         } else {
           charge_loop();
           digitalWrite(BMS_FAULT_PIN, HIGH);
@@ -336,6 +369,7 @@ void check_stat() {
       break;
     default:
       status = FAULT;
+      write_fault(3);
       break;
   }
 }
@@ -552,6 +586,7 @@ void error_temp() {
         Serial.println(
             F(": ************* Over maximum Temperature *************"));
         status = FAULT;
+        write_fault(1);
       }
       if (temp[current_ic][i] <= 0 && temp_bypass[current_ic][i] == 0) {
         Serial.print("[");
@@ -562,8 +597,25 @@ void error_temp() {
         Serial.print("]");
         Serial.println(
             F(": ************* Temprature plug has gone *************"));
+        status = FAULT;
+        write_fault(2);
       }
     }
   }
   Serial.print("\n");
+}
+
+void write_fault(int reason) {
+  if (SD_READY) {
+    SD_write = SD.open("Fault_record.txt", FILE_WRITE);
+    if (SD_write) {
+      SD_write.print("Fault factor: ");
+      SD_write.println(reason);
+      // close the file:
+      SD_write.close();
+    } else {
+      // if the file didn't open, print an error:
+      Serial.println("error opening Fault_record.txt");
+    }
+  }
 }
