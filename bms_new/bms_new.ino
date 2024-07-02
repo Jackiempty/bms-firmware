@@ -173,7 +173,7 @@ void setup() {
 
   // pinMode(STATE_PIN, INPUT);
   // (digitalRead(STATE_PIN) == HIGH) ? status = CHARGE : status = WORK;
-  status = WORK;
+  status = CHARGE;
 
   Serial.println(F("Setup completed"));
 
@@ -357,7 +357,7 @@ void check_stat() {
       break;
     case CHARGE:
       for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-        if (vmax[current_ic] >= 4.25 || vmin[current_ic] <= 2.8) {
+        if (vmax[current_ic] >= 4.12 || vmin[current_ic] <= 2.8) {
           status = FAULT;
           write_fault(0);
         } else {
