@@ -378,9 +378,6 @@ void check_stat() {
 }
 
 void balance(double threshold) {
-  int8_t error = 0;
-
-  wakeup_sleep(TOTAL_IC);
   for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
     for (int i = 0; i < BMS_IC[0].ic_reg.cell_channels; i++) {
       if (abs(BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
@@ -393,8 +390,7 @@ void balance(double threshold) {
         // Serial.print(BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
         //              consvmin[current_ic]);
         // Serial.println(", dischage");
-        set_ic_discharge(i + 1, current_ic, BMS_IC);
-        LTC6811_wrcfg(TOTAL_IC, BMS_IC);
+        select(current_ic, i+1);
       } else if ((BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
                   consvmin[current_ic]) < -threshold) {
         // Serial.print(BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
@@ -403,9 +399,6 @@ void balance(double threshold) {
       }
     }
   }
-  wakeup_idle(TOTAL_IC);
-  error = LTC6811_rdcfg(TOTAL_IC, BMS_IC);
-  check_error(error);
 }
 
 void set_ic_discharge(
@@ -511,16 +504,12 @@ void reset_vmin() {
 
 void select(int ic, int cell) {
   int8_t error = 0;
-  uint32_t conv_time = 0;
-
-  wakeup_sleep(TOTAL_IC);
-  conv_time = LTC6811_pollAdc();
-  error = LTC6811_rdcfg(TOTAL_IC, BMS_IC);
-  check_error(error);  // Check error to enable the function
-
   wakeup_sleep(TOTAL_IC);
   set_ic_discharge(cell, ic, BMS_IC);
   LTC6811_wrcfg(TOTAL_IC, BMS_IC);
+  error = LTC6811_rdcfg(TOTAL_IC, BMS_IC);
+  check_error(error);  // Check error to enable the function
+  wakeup_idle(TOTAL_IC);
 }
 
 void charge_detect() {
@@ -532,7 +521,7 @@ void charge_detect() {
         count++;
       }
       if (BMS_IC[current_ic].cells.c_codes[i] * 0.0001 >= 4.13) {
-        set_ic_discharge(j + 1, i, BMS_IC);
+        select(i, j + 1);
       }
     }
   }
