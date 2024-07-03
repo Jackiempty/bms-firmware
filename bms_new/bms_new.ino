@@ -180,8 +180,8 @@ void setup() {
   Serial.println(F("Setup completed"));
 
   // ******** By pass list *********
-  volt_bypass[9][11] = 1;
-  temp_bypass[8][3] = 1;
+  // volt_bypass[9][11] = 1;
+  // temp_bypass[8][3] = 1;
 }
 
 void loop() {
@@ -281,7 +281,7 @@ void work_loop() {  // thresholds are yet to be determined
 
 void charge_loop() {  // thresholds are yet to be determined
   reset_vmin();
-  balance(0.05);     // Arg = 0.1, or charging I*R
+  balance(0.2);     // Arg = 0.1, or charging I*R
   charge_detect();  // check whether charging is done
 }
 
@@ -378,6 +378,9 @@ void check_stat() {
 }
 
 void balance(double threshold) {
+  int8_t error = 0;
+
+  wakeup_sleep(TOTAL_IC);
   for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
     for (int i = 0; i < BMS_IC[0].ic_reg.cell_channels; i++) {
       if (abs(BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
@@ -385,7 +388,6 @@ void balance(double threshold) {
         // Serial.print(abs(BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
         //                  consvmin[current_ic]));
         // Serial.println(", stop discharge");
-        LTC6811_wrcfg(TOTAL_IC, BMS_IC);
       } else if ((BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
                   consvmin[current_ic]) > threshold) {
         // Serial.print(BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
@@ -401,6 +403,9 @@ void balance(double threshold) {
       }
     }
   }
+  wakeup_idle(TOTAL_IC);
+  error = LTC6811_rdcfg(TOTAL_IC, BMS_IC);
+  check_error(error);
 }
 
 void set_ic_discharge(
@@ -525,6 +530,9 @@ void charge_detect() {
     for (int j = 0; j < 12; j++) {
       if (charge_finish[i][j] == 1) {
         count++;
+      }
+      if (BMS_IC[current_ic].cells.c_codes[i] * 0.0001 >= 4.13) {
+        set_ic_discharge(j + 1, i, BMS_IC);
       }
     }
   }
