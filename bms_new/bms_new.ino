@@ -53,7 +53,8 @@ void stop_ic_discharge(
 void temp_detect();            // called by calculate
 void error_temp();             // detect temperature rules violation
 void write_fault(int reason);  // voltage out of range: 0, over heat: 1,
-                               // temp unpluged: 2, others: 3
+                               // temp unpluged: 2, charge finish: 3, other: 4
+void charge_detect();
 /****** Test ******/
 void select(int ic, int cell);
 
@@ -103,6 +104,7 @@ stats status;
 uint32_t temp[TOTAL_IC][12];
 uint16_t volt_bypass[TOTAL_IC][12] = {0};
 uint16_t temp_bypass[TOTAL_IC][12] = {0};
+uint16_t charge_finish[TOTAL_IC][12] = {0};
 bool SD_READY;
 
 /*********************************************************
@@ -133,28 +135,28 @@ void setup() {
   LTC6811_init_reg_limits(TOTAL_IC, BMS_IC);
 
   // **************** SD card setup ****************
-  SD_READY = SD.begin(4);
-  if (!SD_READY) {
-    Serial.println("SD initialization failed!");
-  }
-  Serial.println("SD initialization done.");
+  // SD_READY = SD.begin(4);
+  // if (!SD_READY) {
+  //   Serial.println("SD initialization failed!");
+  // }
+  // Serial.println("SD initialization done.");
 
-  // open the file. note that only one file can be open at a time,
-  // so you have to close this one before opening another.
-  SD_write = SD.open("Fault_record.txt", FILE_WRITE);
+  // // open the file. note that only one file can be open at a time,
+  // // so you have to close this one before opening another.
+  // SD_write = SD.open("Fault_record.txt", FILE_WRITE);
 
-  // if the file opened okay, write to it:
-  if (SD_write) {
-    Serial.print("Writing to Fault_record.txt...");
+  // // if the file opened okay, write to it:
+  // if (SD_write) {
+  //   Serial.print("Writing to Fault_record.txt...");
 
-    SD_write.println("testing 1, 2, 3.");  // 這裡可以填上當天的日期，時間
+  //   SD_write.println("testing 1, 2, 3.");  // 這裡可以填上當天的日期，時間
 
-    // close the file:
-    SD_write.close();
-  } else {
-    // if the file didn't open, print an error:
-    Serial.println("error opening Fault_record.txt");
-  }
+  //   // close the file:
+  //   SD_write.close();
+  // } else {
+  //   // if the file didn't open, print an error:
+  //   Serial.println("error opening Fault_record.txt");
+  // }
 
   // **************** The rest setup ****************
   // Not working properly yet, hence commented
@@ -279,7 +281,8 @@ void work_loop() {  // thresholds are yet to be determined
 
 void charge_loop() {  // thresholds are yet to be determined
   reset_vmin();
-  balance(0.3);  // Arg = 0.3, or charging I*R
+  balance(0.05);     // Arg = 0.1, or charging I*R
+  charge_detect();  // check whether charging is done
 }
 
 void read_voltage() {
@@ -345,7 +348,7 @@ void check_stat() {
       break;
     case WORK:
       for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-        if (vmax[current_ic] >= 4.25 || vmin[current_ic] <= 2.8) {
+        if (vmax[current_ic] >= 4.2 || vmin[current_ic] <= 2.8) {
           status = FAULT;
           write_fault(0);
         } else {
@@ -357,7 +360,7 @@ void check_stat() {
       break;
     case CHARGE:
       for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-        if (vmax[current_ic] >= 4.12 || vmin[current_ic] <= 2.8) {
+        if (vmax[current_ic] >= 4.2 || vmin[current_ic] <= 2.8) {
           status = FAULT;
           write_fault(0);
         } else {
@@ -485,6 +488,10 @@ void calculate() {  // calculate minimal and maxium
         vmax[current_ic] < BMS_IC[current_ic].cells.c_codes[i] * 0.0001
             ? vmax[current_ic] = BMS_IC[current_ic].cells.c_codes[i] * 0.0001
             : 1;
+
+        BMS_IC[current_ic].cells.c_codes[i] * 0.0001 >= 4.12
+            ? charge_finish[current_ic][i] = 1
+            : charge_finish[current_ic][i] = 0;
       }
     }
   }
@@ -509,6 +516,22 @@ void select(int ic, int cell) {
   wakeup_sleep(TOTAL_IC);
   set_ic_discharge(cell, ic, BMS_IC);
   LTC6811_wrcfg(TOTAL_IC, BMS_IC);
+}
+
+void charge_detect() {
+  int all = TOTAL_IC * 12;
+  int count = 0;
+  for (int i = 0; i < TOTAL_IC; i++) {
+    for (int j = 0; j < 12; j++) {
+      if (charge_finish[i][j] == 1) {
+        count++;
+      }
+    }
+  }
+  if (count >= all * 0.9) {
+    status = FAULT;
+    write_fault(3);
+  }
 }
 
 void temp_detect() {
@@ -606,16 +629,16 @@ void error_temp() {
 }
 
 void write_fault(int reason) {
-  if (SD_READY) {
-    SD_write = SD.open("Fault_record.txt", FILE_WRITE);
-    if (SD_write) {
-      SD_write.print("Fault factor: ");
-      SD_write.println(reason);
-      // close the file:
-      SD_write.close();
-    } else {
-      // if the file didn't open, print an error:
-      Serial.println("error opening Fault_record.txt");
-    }
-  }
+  // if (SD_READY) {
+  //   SD_write = SD.open("Fault_record.txt", FILE_WRITE);
+  //   if (SD_write) {
+  //     SD_write.print("Fault factor: ");
+  //     SD_write.println(reason);
+  //     // close the file:
+  //     SD_write.close();
+  //   } else {
+  //     // if the file didn't open, print an error:
+  //     Serial.println("error opening Fault_record.txt");
+  //   }
+  // }
 }
