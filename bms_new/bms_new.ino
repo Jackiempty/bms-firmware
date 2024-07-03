@@ -1,8 +1,10 @@
 /************************* Includes ***************************/
 #include <Arduino.h>
 #include <DueTimer.h>
+#include <SD.h>
 #include <SPI.h>
 #include <stdint.h>
+File SD_write;
 
 #include "LTC6811.h"
 #include "LTC681x.h"
@@ -48,8 +50,11 @@ void stop_ic_discharge(
     uint8_t current_ic,  // The subsystem of the selected IC to discharging
     cell_asic *ic        // A two dimensional array that will store the data
 );
-void temp_detect();  // called by calculate
-void error_temp();   // detect temperature rules violation
+void temp_detect();            // called by calculate
+void error_temp();             // detect temperature rules violation
+void write_fault(int reason);  // voltage out of range: 0, over heat: 1,
+                               // temp unpluged: 2, charge finish: 3, other: 4
+void charge_detect();
 /****** Test ******/
 void select(int ic, int cell);
 
@@ -99,6 +104,8 @@ stats status;
 uint32_t temp[TOTAL_IC][12];
 uint16_t volt_bypass[TOTAL_IC][12] = {0};
 uint16_t temp_bypass[TOTAL_IC][12] = {0};
+uint16_t charge_finish[TOTAL_IC][12] = {0};
+bool SD_READY;
 
 /*********************************************************
  Set the configuration bits.
@@ -114,6 +121,7 @@ bool DCCBITS_A[12] = {false, false, false, false, false, false,
 bool DCTOBITS[4] = {true, false, true, false};
 
 void setup() {
+  // **************** Stock setup ****************
   Serial.begin(115200);
   quikeval_SPI_connect();
   spi_enable(
@@ -126,7 +134,32 @@ void setup() {
   LTC6811_reset_crc_count(TOTAL_IC, BMS_IC);
   LTC6811_init_reg_limits(TOTAL_IC, BMS_IC);
 
-  // Not quite yet, hence commented
+  // **************** SD card setup ****************
+  // SD_READY = SD.begin(4);
+  // if (!SD_READY) {
+  //   Serial.println("SD initialization failed!");
+  // }
+  // Serial.println("SD initialization done.");
+
+  // // open the file. note that only one file can be open at a time,
+  // // so you have to close this one before opening another.
+  // SD_write = SD.open("Fault_record.txt", FILE_WRITE);
+
+  // // if the file opened okay, write to it:
+  // if (SD_write) {
+  //   Serial.print("Writing to Fault_record.txt...");
+
+  //   SD_write.println("testing 1, 2, 3.");  // 這裡可以填上當天的日期，時間
+
+  //   // close the file:
+  //   SD_write.close();
+  // } else {
+  //   // if the file didn't open, print an error:
+  //   Serial.println("error opening Fault_record.txt");
+  // }
+
+  // **************** The rest setup ****************
+  // Not working properly yet, hence commented
   // Timer0.attachInterrupt(Isr).setFrequency(1).start();
   Serial.println("Vmin:");
   calculate();
@@ -142,13 +175,13 @@ void setup() {
 
   // pinMode(STATE_PIN, INPUT);
   // (digitalRead(STATE_PIN) == HIGH) ? status = CHARGE : status = WORK;
-  status = WORK;
+  status = CHARGE;
 
   Serial.println(F("Setup completed"));
 
   // ******** By pass list *********
-  volt_bypass[9][11] = 1;
-  temp_bypass[8][3] = 1;
+  // volt_bypass[9][11] = 1;
+  // temp_bypass[8][3] = 1;
 }
 
 void loop() {
@@ -248,7 +281,8 @@ void work_loop() {  // thresholds are yet to be determined
 
 void charge_loop() {  // thresholds are yet to be determined
   reset_vmin();
-  balance(0.3);  // Arg = 0.3, or charging I*R
+  balance(0.2);     // Arg = 0.1, or charging I*R
+  charge_detect();  // check whether charging is done
 }
 
 void read_voltage() {
@@ -314,8 +348,9 @@ void check_stat() {
       break;
     case WORK:
       for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-        if (vmax[current_ic] >= 4.25 || vmin[current_ic] <= 2.8) {
+        if (vmax[current_ic] >= 4.2 || vmin[current_ic] <= 2.8) {
           status = FAULT;
+          write_fault(0);
         } else {
           work_loop();
           digitalWrite(BMS_FAULT_PIN, HIGH);
@@ -325,8 +360,9 @@ void check_stat() {
       break;
     case CHARGE:
       for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-        if (vmax[current_ic] >= 4.25 || vmin[current_ic] <= 2.8) {
+        if (vmax[current_ic] >= 4.2 || vmin[current_ic] <= 2.8) {
           status = FAULT;
+          write_fault(0);
         } else {
           charge_loop();
           digitalWrite(BMS_FAULT_PIN, HIGH);
@@ -336,6 +372,7 @@ void check_stat() {
       break;
     default:
       status = FAULT;
+      write_fault(3);
       break;
   }
 }
@@ -348,14 +385,12 @@ void balance(double threshold) {
         // Serial.print(abs(BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
         //                  consvmin[current_ic]));
         // Serial.println(", stop discharge");
-        LTC6811_wrcfg(TOTAL_IC, BMS_IC);
       } else if ((BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
                   consvmin[current_ic]) > threshold) {
         // Serial.print(BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
         //              consvmin[current_ic]);
         // Serial.println(", dischage");
-        set_ic_discharge(i + 1, current_ic, BMS_IC);
-        LTC6811_wrcfg(TOTAL_IC, BMS_IC);
+        select(current_ic, i+1);
       } else if ((BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
                   consvmin[current_ic]) < -threshold) {
         // Serial.print(BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
@@ -451,6 +486,10 @@ void calculate() {  // calculate minimal and maxium
         vmax[current_ic] < BMS_IC[current_ic].cells.c_codes[i] * 0.0001
             ? vmax[current_ic] = BMS_IC[current_ic].cells.c_codes[i] * 0.0001
             : 1;
+
+        BMS_IC[current_ic].cells.c_codes[i] * 0.0001 >= 4.12
+            ? charge_finish[current_ic][i] = 1
+            : charge_finish[current_ic][i] = 0;
       }
     }
   }
@@ -465,16 +504,31 @@ void reset_vmin() {
 
 void select(int ic, int cell) {
   int8_t error = 0;
-  uint32_t conv_time = 0;
-
-  wakeup_sleep(TOTAL_IC);
-  conv_time = LTC6811_pollAdc();
-  error = LTC6811_rdcfg(TOTAL_IC, BMS_IC);
-  check_error(error);  // Check error to enable the function
-
   wakeup_sleep(TOTAL_IC);
   set_ic_discharge(cell, ic, BMS_IC);
   LTC6811_wrcfg(TOTAL_IC, BMS_IC);
+  error = LTC6811_rdcfg(TOTAL_IC, BMS_IC);
+  check_error(error);  // Check error to enable the function
+  wakeup_idle(TOTAL_IC);
+}
+
+void charge_detect() {
+  int all = TOTAL_IC * 12;
+  int count = 0;
+  for (int i = 0; i < TOTAL_IC; i++) {
+    for (int j = 0; j < 12; j++) {
+      if (charge_finish[i][j] == 1) {
+        count++;
+      }
+      if (BMS_IC[current_ic].cells.c_codes[i] * 0.0001 >= 4.13) {
+        select(i, j + 1);
+      }
+    }
+  }
+  if (count >= all * 0.9) {
+    status = FAULT;
+    write_fault(3);
+  }
 }
 
 void temp_detect() {
@@ -552,6 +606,7 @@ void error_temp() {
         Serial.println(
             F(": ************* Over maximum Temperature *************"));
         status = FAULT;
+        write_fault(1);
       }
       if (temp[current_ic][i] <= 0 && temp_bypass[current_ic][i] == 0) {
         Serial.print("[");
@@ -562,8 +617,25 @@ void error_temp() {
         Serial.print("]");
         Serial.println(
             F(": ************* Temprature plug has gone *************"));
+        status = FAULT;
+        write_fault(2);
       }
     }
   }
   Serial.print("\n");
+}
+
+void write_fault(int reason) {
+  // if (SD_READY) {
+  //   SD_write = SD.open("Fault_record.txt", FILE_WRITE);
+  //   if (SD_write) {
+  //     SD_write.print("Fault factor: ");
+  //     SD_write.println(reason);
+  //     // close the file:
+  //     SD_write.close();
+  //   } else {
+  //     // if the file didn't open, print an error:
+  //     Serial.println("error opening Fault_record.txt");
+  //   }
+  // }
 }
