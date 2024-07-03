@@ -520,7 +520,7 @@ void charge_detect() {
       if (charge_finish[i][j] == 1) {
         count++;
       }
-      if (BMS_IC[current_ic].cells.c_codes[i] * 0.0001 >= 4.13) {
+      if (BMS_IC[i].cells.c_codes[j] * 0.0001 >= 4.13) {
         select(i, j + 1);
       }
     }
