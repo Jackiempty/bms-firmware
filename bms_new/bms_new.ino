@@ -193,25 +193,29 @@ void loop() {
   // *********************** testing area **************************
   if (Serial.available() > 0) {
     switch (Serial.read()) {
-      case '5':
+      case '1':
         Serial.print("******* dicharge all *******\n");
         set_all_discharge();
         break;
-      case '6':
+      case '2':
         Serial.print("****** stop discharge ******\n");
         stop_all_discharge();
         break;
-      case '7':
+      case '3':
+        status = WORK;
+        break;
+      case '4':
+        status = CHARGE;
+        break;
+      case '5':
+        Serial.print("********* reset vmin *******\n");
+        reset_vmin();
+        break;
+      case '6':
         Serial.print("********** select **********\n");
         select(0, 3);
         select(1, 8);
         break;
-      case '8':
-        Serial.print("********* reset vmin *******\n");
-        reset_vmin();
-        break;
-      case '9':
-        status = WORK;
       default:
         Serial.print("******** do nothing ********\n");
         break;
@@ -372,7 +376,7 @@ void check_stat() {
       break;
     default:
       status = FAULT;
-      write_fault(3);
+      write_fault(4);
       break;
   }
 }
@@ -390,7 +394,7 @@ void balance(double threshold) {
         // Serial.print(BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
         //              consvmin[current_ic]);
         // Serial.println(", dischage");
-        select(current_ic, i+1);
+        select(current_ic, i + 1);
       } else if ((BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
                   consvmin[current_ic]) < -threshold) {
         // Serial.print(BMS_IC[current_ic].cells.c_codes[i] * 0.0001 -
@@ -603,8 +607,7 @@ void error_temp() {
         Serial.print("[");
         Serial.print(i);
         Serial.print("]");
-        Serial.println(
-            F(": ************* Over maximum Temperature *************"));
+
         status = FAULT;
         write_fault(1);
       }
@@ -615,8 +618,7 @@ void error_temp() {
         Serial.print("[");
         Serial.print(i);
         Serial.print("]");
-        Serial.println(
-            F(": ************* Temprature plug has gone *************"));
+
         status = FAULT;
         write_fault(2);
       }
@@ -626,6 +628,24 @@ void error_temp() {
 }
 
 void write_fault(int reason) {
+  switch (reason) {
+    case 0:
+      Serial.println(F(": ************* Voltage out of Range *************"));
+      break;
+    case 1; Serial.println(
+        F(": ************* Over maximum Temperature *************"));
+        break; case 2:
+      Serial.println(
+          F(": ************* Temprature plug has gone *************"));
+      break;
+    case 3:
+      Serial.println(F(": ************* Charge Finished *************"));
+      break;
+    case 4:
+      Serial.println(F(": ************* Other reasons *************"));
+      break;
+  }
+
   // if (SD_READY) {
   //   SD_write = SD.open("Fault_record.txt", FILE_WRITE);
   //   if (SD_write) {
