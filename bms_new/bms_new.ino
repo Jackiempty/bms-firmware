@@ -630,13 +630,13 @@ void error_temp() {
 void write_fault(int reason) {
   switch (reason) {
     case 0:
-      Serial.println(F(": ************* Voltage out of Range *************"));
+      Serial.println(F(": *********** Voltage out of Range ***********"));
       break;
-    case 1; Serial.println(
-        F(": ************* Over maximum Temperature *************"));
-        break; case 2:
-      Serial.println(
-          F(": ************* Temprature plug has gone *************"));
+    case 1; 
+      Serial.println(F(": ********* Over maximum Temperature *********"));
+      break; 
+    case 2:
+      Serial.println(F(": ********* Temprature plug has gone *********"));
       break;
     case 3:
       Serial.println(F(": ************* Charge Finished *************"));
