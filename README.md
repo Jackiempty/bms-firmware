@@ -72,9 +72,9 @@ Are we perfect yet?
 
 So here's a list that I've made to improve someday in the future. Some of them are half-done already but still not properly functioning, some of them haven't even started a scratch yet. So if you are a lucky person who is going to take over my job and further improve the BMS, you can start with these objective, good luck!  
 
-- [ ] Different voltage thresholds for different mode
+- [x] Different voltage thresholds for different mode
 - [ ] Timer trigger tasks
-- [ ] Improve the flow of balancing
+- [x] Improve the flow of balancing
 - [ ] Eliminate reduntant variables, comments, and serial prints
 - [ ] Add the function to read the config regs and cmd regs
 - [ ] Add the function of low pass filter (for the purpose of not getting fault so easily)
@@ -101,7 +101,7 @@ Hence, I am telling you right now that I require you to follow this rule properl
 BTW, you may notice that I seperate all functions and variables with the classification of **"Stock"** and **"Custom"**, that's because some of the functions and varibles are directly inheritted from the sample code of LTC6811, and to even make that clear enough until where the boundary of the sample code and my own implementation is, I seperate these two parts with some commentary, to keep you noted.  
 
 ## About the library
-**Do not** even think about make changes on the library  
+**Do not** even think about making changes on the library  
 
 So, here's the story.  
 
@@ -112,11 +112,65 @@ After this event, for the sake of simplicity of maintenance, we decided to prohi
 You might ask what we do when we want to do something that the library can do but not exactly in the way we want and we want to change the library. Let me just tell you, we just do whatever we want in the main program in the form of making it another function, even if it is originally done in the funcions of the library.  
 
 ## What is clang-format?
-If a project is maintaining by more than a few people, in will be unpreventable that each of the programmer has their own coding style, and if a project is mixed with too many coding styles, it would be too messy to read.  
+If a project is maintaining by more than a few people, it will be inevitable that each of the programmers has their own coding style, and if a project is mixed with too many coding styles, it would be too messy to read.  
 
 To prevent such things from happening, there's a tool called **"clang-format"** for developer to unify the format of a project so that after formatting, the format will be the same no matter who just changed it. For more information, you can look that up in [this site](https://clang.llvm.org/docs/ClangFormat.html).  
 
 ## Github and commit message
 No further explaination, go look that up by yourself, since that's the least simple prerequisite for any programmer.  
 
+(You can go look that up by refering to the sites linked above)
+
 # Operation guideline
+In this part, I will tell you about a few tips operating BMS.
+
+## Read information from serial monitor
+Once your computer is connected to the serial monitor, there's some information provided for you to monitor the condition of the batterys.  
+
+\* picture yet to be captured  
+
+Look at the picture above, the upper half of the printed contents are voltage while the under half are temperature. There's two ICs for each slave board, so with total of 10 ICs means that there are five boards in total, and the number of the boards are in the same order of the daisy chain, so it is trivial that which board is what number.  
+
+\* fault picture  
+
+In addition, when a FAULT is happening, the serial monitor will also tell you what's wrong with with the data. For instance, the picture above shows that BMS is not receiving temperature data properly so that the FAULT condition is triggered.  
+
+In conclusion, serial monitor cannot only tell you about the data it collects but also inform you of what's wrong with the data it collects so that you have clues to solve the problems.  
+
+## Clear fault
+In default use case, we suggest that if BMS appears to show fault when operating, just restart it and see if the fault continues. However, if you have problem pressing that damn reset buttom (Might happen in some scenario), while you have connected your computer to it which you have access to the serial monitor, you can simply eliminate fault by imputting command.
+
+In the loop function, besides `check_stat()` and `delay()`, there's also a switch statement that can manually determine some of the behavior of BMS, including **FAULT elimination**, by entering the correspond command number, you can easily eliminate fault without resetting the whole LV system.
+```cpp=193
+ // *********************** testing area **************************
+  if (Serial.available() > 0) {
+    switch (Serial.read()) {
+      case '1':
+        Serial.print("******* dicharge all *******\n");
+        set_all_discharge();
+        break;
+      case '2':
+        Serial.print("****** stop discharge ******\n");
+        stop_all_discharge();
+        break;
+      case '3':
+        status = WORK;   // eliminate fault to WORK manually
+        break;
+      case '4':
+        status = CHARGE; // eliminate fault to CHARGE manually
+        break;
+      case '5':
+        Serial.print("********* reset vmin *******\n");
+        reset_vmin();
+        break;
+      case '6':
+        Serial.print("********** select **********\n");
+        select(0, 3);  // select specific cell for 
+        select(1, 8);  // validation
+        break;
+      default:
+        Serial.print("******** do nothing ********\n");
+        break;
+    }
+  }
+```
