@@ -632,7 +632,7 @@ void write_fault(int reason) {
     case 0:
       Serial.println(F(": *********** Voltage out of Range ***********"));
       break;
-    case 1; 
+    case 1:
       Serial.println(F(": ********* Over maximum Temperature *********"));
       break; 
     case 2:
