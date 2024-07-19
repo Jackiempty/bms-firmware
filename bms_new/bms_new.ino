@@ -634,7 +634,7 @@ void write_fault(int reason) {
       break;
     case 1:
       Serial.println(F(": ********* Over maximum Temperature *********"));
-      break; 
+      break;
     case 2:
       Serial.println(F(": ********* Temprature plug has gone *********"));
       break;
