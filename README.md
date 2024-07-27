@@ -119,7 +119,15 @@ To prevent such things from happening, there's a tool called **"clang-format"** 
 ## Github and commit message
 No further explaination, go look that up by yourself, since that's the least simple prerequisite for any programmer.  
 
-(You can go look that up by refering to the sites linked above)
+(You can go look that up by refering to the sites linked above)  
+
+## Contribution
+If you want to make any contribution to the code, you can do so by folling the standard procedure which is:  
+1. Fork it to your own repository
+2. Make your own commitments
+3. Create pull request
+
+If you create any pull request, I would be notified and manually merge your contribution to the main branch, then you would be one of the contributors of the project!  
 
 # Operation guideline
 In this part, I will tell you about a few tips operating BMS.
@@ -127,7 +135,7 @@ In this part, I will tell you about a few tips operating BMS.
 ## Read information from serial monitor
 Once your computer is connected to the serial monitor, there's some information provided for you to monitor the condition of the batterys.  
 
-\* picture yet to be captured  
+![image](https://hackmd.io/_uploads/rkx56XAOA.png)
 
 Look at the picture above, the upper half of the printed contents are voltage while the under half are temperature. There's two ICs for each slave board, so with total of 10 ICs means that there are five boards in total, and the number of the boards are in the same order of the daisy chain, so it is trivial that which board is what number.  
 
