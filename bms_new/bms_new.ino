@@ -208,10 +208,13 @@ void loop() {
         status = CHARGE;
         break;
       case '5':
+        status = FAULT;
+        break;
+      case '6':
         Serial.print("********* reset vmin *******\n");
         reset_vmin();
         break;
-      case '6':
+      case '7':
         Serial.print("********** select **********\n");
         select(0, 3);
         select(1, 8);
