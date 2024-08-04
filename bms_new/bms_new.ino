@@ -175,7 +175,7 @@ void setup() {
 
   // pinMode(STATE_PIN, INPUT);
   // (digitalRead(STATE_PIN) == HIGH) ? status = CHARGE : status = WORK;
-  status = CHARGE;
+  status = WORK;
 
   Serial.println(F("Setup completed"));
 
@@ -225,7 +225,7 @@ void loop() {
     }
   }
 
-  delay(1000);
+  delay(500);
 }
 
 /**************** Local Function Implementation ****************/
