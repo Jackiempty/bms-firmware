@@ -162,19 +162,22 @@ In the loop function, besides `check_stat()` and `delay()`, there's also a switc
         stop_all_discharge();
         break;
       case '3':
-        status = WORK;   // eliminate fault to WORK manually
+        status = WORK;
         break;
       case '4':
-        status = CHARGE; // eliminate fault to CHARGE manually
+        status = CHARGE;
         break;
       case '5':
+        status = FAULT;
+        break;
+      case '6':
         Serial.print("********* reset vmin *******\n");
         reset_vmin();
         break;
-      case '6':
+      case '7':
         Serial.print("********** select **********\n");
-        select(0, 3);  // select specific cell for 
-        select(1, 8);  // validation
+        select(0, 3);
+        select(1, 8);
         break;
       default:
         Serial.print("******** do nothing ********\n");
