@@ -175,7 +175,7 @@ void setup() {
 
   // pinMode(STATE_PIN, INPUT);
   // (digitalRead(STATE_PIN) == HIGH) ? status = CHARGE : status = WORK;
-  status = CHARGE;
+  status = WORK;
 
   Serial.println(F("Setup completed"));
 
@@ -208,10 +208,13 @@ void loop() {
         status = CHARGE;
         break;
       case '5':
+        status = FAULT;
+        break;
+      case '6':
         Serial.print("********* reset vmin *******\n");
         reset_vmin();
         break;
-      case '6':
+      case '7':
         Serial.print("********** select **********\n");
         select(0, 3);
         select(1, 8);
@@ -222,7 +225,7 @@ void loop() {
     }
   }
 
-  delay(1000);
+  delay(500);
 }
 
 /**************** Local Function Implementation ****************/
@@ -634,7 +637,7 @@ void write_fault(int reason) {
       break;
     case 1:
       Serial.println(F(": ********* Over maximum Temperature *********"));
-      break; 
+      break;
     case 2:
       Serial.println(F(": ********* Temprature plug has gone *********"));
       break;
