@@ -664,11 +664,4 @@ void write_fault(int reason) {
   // }
 }
 
-void test_format(int test)
-{
-  // not writing correctly intentionally
-  if (true)
-  {
-    Serial.println("Hello world");
-  }
-}
+void test_format(int test) {}
