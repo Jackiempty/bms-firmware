@@ -663,5 +663,3 @@ void write_fault(int reason) {
   //   }
   // }
 }
-
-void test_format(int test) {}
