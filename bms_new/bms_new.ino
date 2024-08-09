@@ -57,6 +57,7 @@ void write_fault(int reason);  // voltage out of range: 0, over heat: 1,
 void charge_detect();
 /****** Test ******/
 void select(int ic, int cell);
+void test_format(int test);
 
 /*******************************************************************
   Setup Variables
@@ -661,4 +662,13 @@ void write_fault(int reason) {
   //     Serial.println("error opening Fault_record.txt");
   //   }
   // }
+}
+
+void test_format(int test)
+{
+  // not writing correctly intentionally
+  if (true)
+  {
+    Serial.println("Hello world");
+  }
 }
