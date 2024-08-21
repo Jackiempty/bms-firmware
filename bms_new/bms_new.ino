@@ -28,7 +28,6 @@ File SD_write;
 /****** Stock ******/
 void check_error(int error);
 void print_cells(uint8_t datalog_en);
-void print_conv_time(uint32_t conv_time);
 /****** Custom ******/
 void Isr();
 void work_loop();
@@ -106,6 +105,7 @@ uint16_t volt_bypass[TOTAL_IC][12] = {0};
 uint16_t temp_bypass[TOTAL_IC][12] = {0};
 uint16_t charge_finish[TOTAL_IC][12] = {0};
 bool SD_READY;
+int count;
 
 /*********************************************************
  Set the configuration bits.
@@ -176,6 +176,7 @@ void setup() {
   // pinMode(STATE_PIN, INPUT);
   // (digitalRead(STATE_PIN) == HIGH) ? status = CHARGE : status = WORK;
   status = WORK;
+  count = 0;
 
   Serial.println(F("Setup completed"));
 
@@ -225,7 +226,8 @@ void loop() {
     }
   }
 
-  delay(500);
+  delay(250);
+  count++;
 }
 
 /**************** Local Function Implementation ****************/
@@ -268,13 +270,6 @@ void print_cells(uint8_t datalog_en) {  // modified
   Serial.print("\n");
 }
 
-void print_conv_time(uint32_t conv_time) {
-  uint16_t m_factor = 1000;  // to print in ms
-
-  // Serial.print(F("Conversion completed in:"));
-  // Serial.print(((float)conv_time / m_factor), 1);
-  // Serial.println(F("ms \n"));
-}
 /****** Custom ******/
 void Isr() {  // Interrupt main
   Serial.print("loop\n");
@@ -299,14 +294,13 @@ void read_voltage() {
   wakeup_sleep(TOTAL_IC);
   LTC6811_adcv(ADC_CONVERSION_MODE, ADC_DCP, CELL_CH_TO_CONVERT);
   conv_time = LTC6811_pollAdc();
-  print_conv_time(conv_time);
   wakeup_idle(TOTAL_IC);
   error = LTC6811_rdcv(SEL_ALL_REG, TOTAL_IC,
                        BMS_IC);  // Set to read back all cell voltage registers
   check_error(error);
 
   // eliminate failed observation
-  if (conv_time != 0) {
+  if (conv_time != 0 && (count % 4 == 0)) {
     print_cells(DATALOG_DISABLED);
   }
 }
@@ -585,18 +579,20 @@ void temp_detect() {
     }
   }
 
-  for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-    Serial.print(" IC ");
-    Serial.print(current_ic + 1, DEC);
-    Serial.print(": ");
-    for (int i = 0; i < 5; i++) {
-      Serial.print(temp[current_ic][i]);
-      Serial.print(", ");
+  if (count % 4 == 0) {
+    for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
+      Serial.print(" IC ");
+      Serial.print(current_ic + 1, DEC);
+      Serial.print(": ");
+      for (int i = 0; i < 5; i++) {
+        Serial.print(temp[current_ic][i]);
+        Serial.print(", ");
+      }
+      Serial.print("\n");
     }
     Serial.print("\n");
   }
 
-  Serial.print("\n");
   error_temp();
 }
 
