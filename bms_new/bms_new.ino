@@ -182,7 +182,7 @@ void setup() {
 
   // ******** By pass list *********
   // volt_bypass[9][11] = 1;
-  // temp_bypass[8][3] = 1;
+  temp_bypass[7][4] = 1;
 }
 
 void loop() {
@@ -345,7 +345,9 @@ void check_stat() {
     case FAULT:
       // Add a readpin to eliminate FAULT
       digitalWrite(BMS_FAULT_PIN, LOW);
-      Serial.print("********** FAULT **********\n\n");
+      if (count % 4 == 0) {
+        Serial.print("********** FAULT **********\n\n");
+      }
       break;
     case WORK:
       for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
@@ -357,7 +359,9 @@ void check_stat() {
           digitalWrite(BMS_FAULT_PIN, HIGH);
         }
       }
-      Serial.print("********** WORK **********\n\n");
+      if (count % 4 == 0) {
+        Serial.print("********** WORK **********\n\n");
+      }
       break;
     case CHARGE:
       for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
@@ -369,7 +373,9 @@ void check_stat() {
           digitalWrite(BMS_FAULT_PIN, HIGH);
         }
       }
-      Serial.print("********** CHARGE **********\n\n");
+      if (count % 4 == 0) {
+        Serial.print("********** CHARGE **********\n\n");
+      }
       break;
     default:
       status = FAULT;
@@ -611,50 +617,63 @@ void error_temp() {
         write_fault(1);
       }
       if (temp[current_ic][i] <= 0 && temp_bypass[current_ic][i] == 0) {
-        Serial.print("[");
-        Serial.print(current_ic + 1, DEC);
-        Serial.print("]");
-        Serial.print("[");
-        Serial.print(i);
-        Serial.print("]");
+        if (temp_bypass[current_ic][i] == 0) {
+          Serial.print("[");
+          Serial.print(current_ic + 1, DEC);
+          Serial.print("]");
+          Serial.print("[");
+          Serial.print(i - 1);
+          Serial.print("]");
+        } else {
+          Serial.print("[");
+          Serial.print(current_ic + 1, DEC);
+          Serial.print("]");
+          Serial.print("[");
+          Serial.print(i);
+          Serial.print("]");
+        }
 
         status = FAULT;
         write_fault(2);
       }
     }
   }
-  Serial.print("\n");
+  if (count % 4 == 0) {
+    Serial.print("\n");
+  }
 }
 
 void write_fault(int reason) {
-  switch (reason) {
-    case 0:
-      Serial.println(F(": *********** Voltage out of Range ***********"));
-      break;
-    case 1:
-      Serial.println(F(": ********* Over maximum Temperature *********"));
-      break;
-    case 2:
-      Serial.println(F(": ********* Temprature plug has gone *********"));
-      break;
-    case 3:
-      Serial.println(F(": ************* Charge Finished *************"));
-      break;
-    case 4:
-      Serial.println(F(": ************* Other reasons *************"));
-      break;
+  if (count % 4 == 0) {
+    switch (reason) {
+      case 0:
+        Serial.println(F(": *********** Voltage out of Range ***********"));
+        break;
+      case 1:
+        Serial.println(F(": ********* Over maximum Temperature *********"));
+        break;
+      case 2:
+        Serial.println(F(": ********* Temprature plug has gone *********"));
+        break;
+      case 3:
+        Serial.println(F(": ************* Charge Finished *************"));
+        break;
+      case 4:
+        Serial.println(F(": ************* Other reasons *************"));
+        break;
+    }
   }
-
-  // if (SD_READY) {
-  //   SD_write = SD.open("Fault_record.txt", FILE_WRITE);
-  //   if (SD_write) {
-  //     SD_write.print("Fault factor: ");
-  //     SD_write.println(reason);
-  //     // close the file:
-  //     SD_write.close();
-  //   } else {
-  //     // if the file didn't open, print an error:
-  //     Serial.println("error opening Fault_record.txt");
-  //   }
-  // }
 }
+
+// if (SD_READY) {
+//   SD_write = SD.open("Fault_record.txt", FILE_WRITE);
+//   if (SD_write) {
+//     SD_write.print("Fault factor: ");
+//     SD_write.println(reason);
+//     // close the file:
+//     SD_write.close();
+//   } else {
+//     // if the file didn't open, print an error:
+//     Serial.println("error opening Fault_record.txt");
+//   }
+// }
