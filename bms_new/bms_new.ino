@@ -351,7 +351,7 @@ void check_stat() {
       break;
     case WORK:
       for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-        if (vmax[current_ic] >= 4.2 || vmin[current_ic] <= 2.8) {
+        if (vmax[current_ic] >= 4.2 || vmin[current_ic] <= 2.5) {
           status = FAULT;
           write_fault(0);
         } else {
@@ -365,7 +365,7 @@ void check_stat() {
       break;
     case CHARGE:
       for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
-        if (vmax[current_ic] >= 4.2 || vmin[current_ic] <= 2.8) {
+        if (vmax[current_ic] >= 4.2 || vmin[current_ic] <= 2.5) {
           status = FAULT;
           write_fault(0);
         } else {
