@@ -617,21 +617,12 @@ void error_temp() {
         write_fault(1);
       }
       if (temp[current_ic][i] <= 0 && temp_bypass[current_ic][i] == 0) {
-        if (temp_bypass[current_ic][i] == 0) {
-          Serial.print("[");
-          Serial.print(current_ic + 1, DEC);
-          Serial.print("]");
-          Serial.print("[");
-          Serial.print(i - 1);
-          Serial.print("]");
-        } else {
-          Serial.print("[");
-          Serial.print(current_ic + 1, DEC);
-          Serial.print("]");
-          Serial.print("[");
-          Serial.print(i);
-          Serial.print("]");
-        }
+        Serial.print("[");
+        Serial.print(current_ic + 1, DEC);
+        Serial.print("]");
+        Serial.print("[");
+        Serial.print(i);
+        Serial.print("]");
 
         status = FAULT;
         write_fault(2);
