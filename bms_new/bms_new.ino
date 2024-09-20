@@ -217,7 +217,6 @@ void loop() {
         break;
       case '7':
         Serial.print("********** select **********\n");
-        select(0, 3);
         select(1, 8);
         break;
       default:
@@ -239,6 +238,7 @@ void check_error(int error) {
 }
 
 void print_cells(uint8_t datalog_en) {  // modified
+  float total = 0;
   for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
     if (datalog_en == 0) {
       Serial.print(" IC ");
@@ -250,24 +250,17 @@ void print_cells(uint8_t datalog_en) {  // modified
           Serial.print(float(0), 4);
         } else {
           Serial.print(BMS_IC[current_ic].cells.c_codes[i] * 0.0001, 4);
+          total += BMS_IC[current_ic].cells.c_codes[i] * 0.0001;
         }
         Serial.print(", ");
       }
       Serial.println();
-    } else {
-      // Serial.print(" Cells :");
-      for (int i = 0; i < BMS_IC[0].ic_reg.cell_channels; i++) {
-        // Set non-read cells to 0 rather than 6.5535
-        if (BMS_IC[current_ic].cells.c_codes[i] == 65535) {
-          Serial.print(float(0), 4);
-        } else {
-          Serial.print(BMS_IC[current_ic].cells.c_codes[i] * 0.0001, 4);
-        }
-        Serial.print(", ");
-      }
     }
   }
   Serial.print("\n");
+  Serial.print("Total: ");
+  Serial.print(total, 4);
+  Serial.println(" V");
 }
 
 /****** Custom ******/
@@ -325,7 +318,6 @@ void set_all_discharge() {
 void stop_all_discharge() {
   int8_t error = 0;
   uint32_t conv_time = 0;
-
   wakeup_sleep(TOTAL_IC);
   LTC6811_clear_discharge(TOTAL_IC, BMS_IC);
   LTC6811_wrcfg(TOTAL_IC, BMS_IC);
