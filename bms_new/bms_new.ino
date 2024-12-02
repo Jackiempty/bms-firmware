@@ -56,6 +56,7 @@ void write_fault(int reason);  // voltage out of range: 0, over heat: 1,
 void charge_detect();
 /****** Test ******/
 void select(int ic, int cell);
+void test_format(int test);
 
 /*******************************************************************
   Setup Variables
@@ -106,6 +107,7 @@ uint16_t temp_bypass[TOTAL_IC][12] = {0};
 uint16_t charge_finish[TOTAL_IC][12] = {0};
 bool SD_READY;
 int count;
+int fault_count;
 
 /*********************************************************
  Set the configuration bits.
@@ -177,12 +179,13 @@ void setup() {
   // (digitalRead(STATE_PIN) == HIGH) ? status = CHARGE : status = WORK;
   status = WORK;
   count = 0;
+  fault_count = 0;
 
   Serial.println(F("Setup completed"));
 
   // ******** By pass list *********
   // volt_bypass[9][11] = 1;
-  temp_bypass[7][4] = 1;
+  // temp_bypass[7][4] = 1;
 }
 
 void loop() {
@@ -344,8 +347,8 @@ void check_stat() {
     case WORK:
       for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
         if (vmax[current_ic] >= 4.2 || vmin[current_ic] <= 2.5) {
-          status = FAULT;
           write_fault(0);
+          break;
         } else {
           work_loop();
           digitalWrite(BMS_FAULT_PIN, HIGH);
@@ -358,8 +361,8 @@ void check_stat() {
     case CHARGE:
       for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
         if (vmax[current_ic] >= 4.2 || vmin[current_ic] <= 2.5) {
-          status = FAULT;
           write_fault(0);
+          break;
         } else {
           charge_loop();
           digitalWrite(BMS_FAULT_PIN, HIGH);
@@ -370,7 +373,6 @@ void check_stat() {
       }
       break;
     default:
-      status = FAULT;
       write_fault(4);
       break;
   }
@@ -513,18 +515,18 @@ void select(int ic, int cell) {
 
 void charge_detect() {
   int all = TOTAL_IC * 12;
-  int count = 0;
+  int counter = 0;
   for (int i = 0; i < TOTAL_IC; i++) {
     for (int j = 0; j < 12; j++) {
       if (charge_finish[i][j] == 1) {
-        count++;
+        counter++;
       }
       if (BMS_IC[i].cells.c_codes[j] * 0.0001 >= 4.13) {
         select(i, j + 1);
       }
     }
   }
-  if (count >= all * 0.9) {
+  if (counter >= all * 0.9) {
     status = FAULT;
     write_fault(3);
   }
@@ -595,28 +597,35 @@ void temp_detect() {
 }
 
 void error_temp() {
+  int done = 0;
   for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
     for (int i = 0; i < 5; i++) {
       if (temp[current_ic][i] > 60 && temp_bypass[current_ic][i] == 0) {
+        Serial.println("Temperature too high:");
         Serial.print("[");
         Serial.print(current_ic + 1, DEC);
         Serial.print("]");
         Serial.print("[");
         Serial.print(i);
         Serial.print("]");
-
-        status = FAULT;
+        if (done == 0) {
+          fault_count++;
+          done++;
+        }
         write_fault(1);
       }
       if (temp[current_ic][i] <= 0 && temp_bypass[current_ic][i] == 0) {
+        Serial.println("Temperature too low:");
         Serial.print("[");
         Serial.print(current_ic + 1, DEC);
         Serial.print("]");
         Serial.print("[");
         Serial.print(i);
         Serial.print("]");
-
-        status = FAULT;
+        if (done == 0) {
+          fault_count++;
+          done++;
+        }
         write_fault(2);
       }
     }
@@ -627,24 +636,26 @@ void error_temp() {
 }
 
 void write_fault(int reason) {
-  if (count % 4 == 0) {
-    switch (reason) {
-      case 0:
-        Serial.println(F(": *********** Voltage out of Range ***********"));
-        break;
-      case 1:
-        Serial.println(F(": ********* Over maximum Temperature *********"));
-        break;
-      case 2:
-        Serial.println(F(": ********* Temprature plug has gone *********"));
-        break;
-      case 3:
-        Serial.println(F(": ************* Charge Finished *************"));
-        break;
-      case 4:
-        Serial.println(F(": ************* Other reasons *************"));
-        break;
-    }
+  fault_count++;
+  if (fault_count > 10) {
+    status = FAULT;
+  }
+  switch (reason) {
+    case 0:
+      Serial.println(F(": *********** Voltage out of Range ***********"));
+      break;
+    case 1:
+      Serial.println(F(": ********* Over maximum Temperature *********"));
+      break;
+    case 2:
+      Serial.println(F(": ********* Temprature plug has gone *********"));
+      break;
+    case 3:
+      Serial.println(F(": ************* Charge Finished *************"));
+      break;
+    case 4:
+      Serial.println(F(": ************* Other reasons *************"));
+      break;
   }
 }
 
