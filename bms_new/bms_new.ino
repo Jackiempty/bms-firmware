@@ -274,11 +274,13 @@ void Isr() {  // Interrupt main
 
 void work_loop() {  // thresholds are yet to be determined
   reset_vmin();
+  fault_count = 0;
   balance(0.3);  // Arg = I*R when working
 }
 
 void charge_loop() {  // thresholds are yet to be determined
   reset_vmin();
+  fault_count = 0;
   balance(0.2);     // Arg = 0.1, or charging I*R
   charge_detect();  // check whether charging is done
 }
@@ -349,7 +351,7 @@ void check_stat() {
         if (vmax[current_ic] >= 4.2 || vmin[current_ic] <= 2.5) {
           write_fault(0);
           break;
-        } else {
+        } else { // this else case shoudn't be in for loop, try to move it out and make it work in the same way
           work_loop();
           digitalWrite(BMS_FAULT_PIN, HIGH);
         }
@@ -609,10 +611,9 @@ void error_temp() {
         Serial.print(i);
         Serial.print("]");
         if (done == 0) {
-          fault_count++;
+          write_fault(1);
           done++;
         }
-        write_fault(1);
       }
       if (temp[current_ic][i] <= 0 && temp_bypass[current_ic][i] == 0) {
         Serial.println("Temperature too low:");
@@ -623,10 +624,9 @@ void error_temp() {
         Serial.print(i);
         Serial.print("]");
         if (done == 0) {
-          fault_count++;
+          write_fault(2);
           done++;
         }
-        write_fault(2);
       }
     }
   }
