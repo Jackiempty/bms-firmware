@@ -228,7 +228,7 @@ void loop() {
     }
   }
 
-  delay(250);
+  delay(500);
   count++;
 }
 
@@ -298,7 +298,7 @@ void read_voltage() {
   check_error(error);
 
   // eliminate failed observation
-  if (conv_time != 0 && (count % 4 == 0)) {
+  if (conv_time != 0) {
     print_cells(DATALOG_DISABLED);
   }
 }
@@ -334,6 +334,7 @@ void stop_all_discharge() {
 }
 
 void check_stat() {
+  int done = 0;
   stop_all_discharge();
   read_voltage();  // read and print the current voltage
   calculate();     // calculate minimal and maxium
@@ -342,35 +343,37 @@ void check_stat() {
     case FAULT:
       // Add a readpin to eliminate FAULT
       digitalWrite(BMS_FAULT_PIN, LOW);
-      if (count % 4 == 0) {
+      if (1) {
         Serial.print("********** FAULT **********\n\n");
       }
       break;
     case WORK:
       for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
         if (vmax[current_ic] >= 4.2 || vmin[current_ic] <= 2.5) {
-          write_fault(0);
-          break;
-        } else { // this else case shoudn't be in for loop, try to move it out and make it work in the same way
-          work_loop();
-          digitalWrite(BMS_FAULT_PIN, HIGH);
+          if (done == 0) {
+            write_fault(0);
+            done++;
+          }
         }
       }
-      if (count % 4 == 0) {
+      work_loop();
+      digitalWrite(BMS_FAULT_PIN, HIGH);
+      if (1) {
         Serial.print("********** WORK **********\n\n");
       }
       break;
     case CHARGE:
       for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
         if (vmax[current_ic] >= 4.2 || vmin[current_ic] <= 2.5) {
-          write_fault(0);
-          break;
-        } else {
-          charge_loop();
-          digitalWrite(BMS_FAULT_PIN, HIGH);
-        }
+          if (done == 0) {
+            write_fault(0);
+            done++;
+          }
+        } 
       }
-      if (count % 4 == 0) {
+      charge_loop();
+      digitalWrite(BMS_FAULT_PIN, HIGH);
+      if (1) {
         Serial.print("********** CHARGE **********\n\n");
       }
       break;
@@ -581,7 +584,7 @@ void temp_detect() {
     }
   }
 
-  if (count % 4 == 0) {
+  if (1) {
     for (int current_ic = 0; current_ic < TOTAL_IC; current_ic++) {
       Serial.print(" IC ");
       Serial.print(current_ic + 1, DEC);
@@ -630,7 +633,7 @@ void error_temp() {
       }
     }
   }
-  if (count % 4 == 0) {
+  if (1) {
     Serial.print("\n");
   }
 }
